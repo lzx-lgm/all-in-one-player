@@ -51,7 +51,7 @@ input,select{font-family:inherit}
 .stat-row div b{font-family:Manrope,sans-serif;font-size:21px;display:block}
 .stat-row div span{font-size:11px;color:var(--muted);letter-spacing:.08em}
 .side-note{font-size:12px;color:var(--muted);line-height:1.7;margin-top:auto}
-.stage-center{position:relative;padding:30px 26px 22px;text-align:center;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:380px}
+.stage-center{position:relative;padding:30px 26px 22px;text-align:center;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:380px;transition:transform .6s ease}
 .stage-center::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 50% at 50% 46%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 70%);pointer-events:none}
 .stage-kicker{font-family:Manrope,sans-serif;letter-spacing:.4em;font-size:10px;color:var(--muted)}
 .stage-cover{width:86px;height:86px;border-radius:50%;margin:16px 0 6px;display:grid;place-items:center;font-family:"Noto Serif SC",serif;font-size:32px;font-weight:900;color:#06110e;border:3px solid rgba(255,255,255,.75);box-shadow:0 0 0 6px rgba(255,255,255,.06),0 18px 44px rgba(0,0,0,.65);position:relative;z-index:1}
@@ -89,7 +89,7 @@ input,select{font-family:inherit}
 .shelf-viewport{perspective:1100px;overflow:hidden;padding:10px 0 4px}
 .shelf{display:flex;gap:14px;justify-content:flex-start;overflow-x:auto;padding:16px 8px 20px;scrollbar-width:none;transform-style:preserve-3d}
 .shelf::-webkit-scrollbar{display:none}
-.shelf-card{flex:0 0 168px;text-align:left;border:1px solid var(--line);border-radius:var(--r-md);padding:12px;color:var(--ink);background:linear-gradient(165deg,rgba(255,255,255,.09),rgba(255,255,255,.02));backdrop-filter:blur(10px);transition:transform .35s,border-color .25s;min-height:196px}
+.shelf-card{flex:0 0 168px;text-align:left;border:1px solid var(--line);border-radius:var(--r-md);padding:12px;color:var(--ink);background:linear-gradient(165deg,rgba(255,255,255,.09),rgba(255,255,255,.02));backdrop-filter:blur(10px);transition:transform var(--shelf-anim,.35s),border-color .25s;min-height:196px}
 .shelf-card:hover{transform:rotateY(0deg) translateY(-6px)!important;border-color:var(--line2)}
 .shelf-card .sc-cover{height:92px;border-radius:10px;display:grid;place-items:center;font-family:"Noto Serif SC",serif;font-size:30px;font-weight:900;color:rgba(255,255,255,.92);margin-bottom:10px}
 .shelf-card b{display:block;font-size:13.5px;line-height:1.45;min-height:39px}
@@ -220,4 +220,62 @@ input[type=range].seek{flex:1;accent-color:var(--accent);height:26px}
 .theater-bar .speed-sel{background:rgba(0,0,0,.35)}
 .dl-card a.go{text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:15px}
 footer{margin-top:36px;text-align:center;color:var(--faint);font-size:12px;line-height:1.9}
+/* ---------- visual console v2 · Mineradio 式六栏 ---------- */
+.big-clock{display:flex;flex-direction:column;gap:2px}
+.big-clock #bigClock{font-family:Manrope,"Noto Sans SC",sans-serif;font-size:52px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff}
+.big-clock #bigDate{font-size:12px;color:var(--muted);letter-spacing:.12em}
+.console{padding:16px 16px 18px;max-height:640px;display:flex;flex-direction:column;overflow:hidden}
+.console-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.console-head h3{margin:0;font-size:15px}
+.console-head p{margin:2px 0 0;font-size:10.5px;color:var(--muted);letter-spacing:.14em}
+.console-search{display:flex;gap:6px;margin:12px 0 10px}
+.console-search input{flex:1;min-width:0;background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:999px;color:var(--ink);padding:8px 13px;font-size:12.5px;outline:none;min-height:36px}
+.console-search input:focus{border-color:var(--accent)}
+.console-search button{flex:0 0 auto;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:999px;color:var(--ink2);font-size:12px;padding:0 10px;min-height:36px}
+.console-tabs{display:flex;gap:2px;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:999px;padding:3px;margin-bottom:10px}
+.ctab{flex:1;border:0;background:transparent;color:var(--muted);border-radius:999px;padding:8px 0;font-size:12.5px;font-weight:700;min-height:34px}
+.ctab.active{background:#f4f1e8;color:#0a0a0c}
+.console-body{overflow-y:auto;scrollbar-width:thin;min-height:0}
+.cpanel{display:none}
+.cpanel.active{display:block}
+.csec{border:1px solid var(--line);border-radius:16px;padding:13px 14px;margin-bottom:10px;background:rgba(0,0,0,.25)}
+.csec>b{display:block;font-size:14px}
+.csec>span{display:block;font-size:11.5px;color:var(--muted);margin:2px 0 10px;line-height:1.5}
+.cnote{font-size:12px;color:var(--muted);line-height:1.7;margin:4px 0}
+.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.preset-grid .preset{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--ink);border-radius:14px;padding:11px 12px;font-size:13px;font-weight:800;text-align:left;min-height:56px;display:block}
+.preset-grid .preset span{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
+.preset-grid .preset.active{border-color:var(--accent);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap}
+.cbtn{border:1px solid var(--line2);background:rgba(255,255,255,.06);color:var(--ink);border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;min-height:36px}
+.cbtn:hover{border-color:#fff}
+.cbtn.toggle.on{background:var(--accent);color:#01231c;border-color:transparent}
+.cbtn:disabled{opacity:.45;cursor:default}
+.crow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink2)}
+.crow:last-child{border-bottom:0}
+.crow>span:first-child{flex:1}
+.crow small{color:var(--muted);font-size:11.5px}
+.crow input[type=color]{width:44px;height:30px;border:1px solid var(--line2);border-radius:8px;background:transparent;padding:2px}
+.we-badge{background:#1b6ff2;color:#fff;border-radius:8px;font-weight:900;font-size:12px;padding:5px 8px;flex:0 0 auto}
+.seg{display:flex;gap:4px;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:999px;padding:3px;margin:8px 0}
+.seg-btn{flex:1;border:0;background:transparent;color:var(--muted);border-radius:999px;padding:8px 4px;font-size:12.5px;font-weight:700;min-height:34px}
+.seg-btn.active{background:#f4f1e8;color:#0a0a0c}
+.saves{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.saves .save-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.saves .save-row b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#customLyrics{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--line2);border-radius:12px;color:var(--ink);padding:10px 12px;font-size:13px;line-height:1.7;resize:vertical;outline:none}
+#bgMedia{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;opacity:1}
+#bgMedia img,#bgMedia video{width:100%;height:100%;object-fit:cover;object-position:50% 50%}
+body.fx-void #bgCanvas,body.fx-void .vignette{display:none}
+body.fx-tunnel #bgCanvas{animation:tunnelZoom 14s ease-in-out infinite alternate}
+@keyframes tunnelZoom{from{transform:scale(1)}to{transform:scale(1.18)}}
+body.fx-vinyl .stage-cover{width:150px;height:150px;background:repeating-radial-gradient(circle at 50% 50%,#111 0 3px,#222 3px 5px)!important;color:var(--accent);border-color:var(--accent)}
+body.fx-planet .stage-cover{box-shadow:0 0 0 6px rgba(255,255,255,.06),0 0 60px 10px color-mix(in srgb,var(--accent) 45%,transparent),0 18px 44px rgba(0,0,0,.65)}
+body.shelf-hidden .shelf-sec{display:none}
+body.shelf-side .shelf-sec{position:fixed;right:0;top:96px;bottom:130px;width:250px;z-index:40;margin:0;background:rgba(6,7,9,.88);border-left:1px solid var(--line);border-radius:0;padding:14px;overflow-y:auto;backdrop-filter:blur(20px)}
+body.shelf-side .shelf{flex-direction:column;overflow:visible}
+body.shelf-side .shelf-card{flex:0 0 auto;min-height:0}
+body.shelf-static .shelf-card:hover{transform:none!important}
+.lyrics-box.immersive{font-size:17px}
+#stageLyricSub{transition:opacity .2s}
 @media (prefers-reduced-motion: reduce){.stage-cover.spin,.now .ncov.spin{animation:none}html{scroll-behavior:auto}}
