@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="color-scheme" content="dark"/>
+<meta name="theme-color" content="#000000"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="全能播放器"/>
+<link rel="manifest" href="assets/manifest.webmanifest"/>
+<link rel="icon" type="image/png" href="assets/icon-192.png"/>
+<link rel="apple-touch-icon" href="assets/icon-192.png"/>
+<title>全能播放器 OmniRadio+ — Mineradio 式视觉舞台 · 音乐 + MV 原画直通</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@600;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<canvas id="bgCanvas" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="topbar">
+  <a class="wordmark" href="#" onclick="return false"><b>Omni<i>radio</i><u>+</u></b><span>PRIVATE VISUAL RADIO</span></a>
+  <div class="search"><input id="searchInput" placeholder="搜索歌曲 / 歌手 / MV — 全网 8 平台统一搜索"><button id="searchBtn">搜索</button></div>
+  <div class="top-actions">
+    <button class="glass-btn" id="loginBtn">登录账号</button>
+    <button class="glass-btn hide-m" id="immersiveBtn">⛶ 沉浸全屏</button>
+    <button class="glass-btn installBtn">⤓ 安装网页版</button>
+    <button class="glass-btn solid" onclick="document.getElementById('downloadSec').scrollIntoView({behavior:'smooth'})">下载软件版</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ======== LYRIC STAGE · Mineradio 式视觉舞台 ======== -->
+  <div class="stage">
+    <aside class="glass stage-side">
+      <div class="stage-kicker">LISTENING TODAY · 今日聆听</div>
+      <div class="quote">“让今天的声音，<br>从你<em>喜欢的地方</em>开始。”</div>
+      <div class="stat-row">
+        <div><b id="statSongs">12 首</b><span>演示曲库</span></div>
+        <div><b>8 平台</b><span>统一聚合</span></div>
+        <div><b>原画</b><span>MV 直通</span></div>
+      </div>
+      <p class="side-note">学 Mineradio 的地方：纯黑银河底、粒子视觉、歌词当舞台主角、电影镜头般的呼吸感。比它多的一手：多了一块视频影院（切到下方「MV / 视频影院」标签）——MV 与本地视频按<b style="color:var(--ink)">原始格式、原始分辨率</b>直通播放，不转码、不压画质。</p>
+      <button class="glass-btn" id="heroPlay" style="align-self:flex-start">▶ 开始播放</button>
+    </aside>
+
+    <section class="glass stage-center" aria-label="歌词舞台">
+      <div class="stage-kicker">LYRIC STAGE · 歌词舞台</div>
+      <div class="stage-cover" id="disc" style="background:linear-gradient(135deg,#1DB954,#00F5D4)">N</div>
+      <div id="stageTitle">Neon Skyline — 星际漫游</div>
+      <div id="stageArtist">Luna Waves · Spotify</div>
+      <div id="stageLyric">我们穿过城市发光的海</div>
+      <div id="stageLyricSub">NEON LIGHTS ARE CALLING OUT TONIGHT</div>
+      <canvas id="viz" width="640" height="72"></canvas>
+      <div class="presets" id="presets">
+        <button class="preset active" data-preset="galaxy">星河 · 默认</button>
+        <button class="preset" data-preset="aurora">极光</button>
+        <button class="preset" data-preset="flow">流光</button>
+        <button class="preset" data-preset="dusk">暮色</button>
+      </div>
+    </section>
+
+    <aside class="glass stage-side console">
+      <h3>视觉控制台</h3>
+      <p>MINERADIO · 即时生效 — 调粒子、溢光与歌词，舞台马上变。</p>
+      <div class="ctl"><label>界面高亮</label>
+        <div class="swatches">
+          <button class="swatch active" data-color="#00F5D4" style="background:#00F5D4" aria-label="薄荷绿"></button>
+          <button class="swatch" data-color="#F4D28A" style="background:#F4D28A" aria-label="暖金"></button>
+          <button class="swatch" data-color="#7FD8FF" style="background:#7FD8FF" aria-label="天空蓝"></button>
+          <button class="swatch" data-color="#ff8fa3" style="background:#ff8fa3" aria-label="暮色玫瑰"></button>
+        </div>
+      </div>
+      <div class="ctl"><label>粒子强度 <output id="oP">60</output></label><input type="range" id="fxParticles" min="0" max="100" value="60"></div>
+      <div class="ctl"><label>歌词溢光 <output id="oG">22</output></label><input type="range" id="fxGlow" min="0" max="48" value="22"></div>
+      <div class="ctl"><label>歌词大小 <output id="oL">100%</output></label><input type="range" id="fxLyric" min="70" max="130" value="100"></div>
+      <div class="ctl"><label>律动强度 <output id="oB">100%</output></label><input type="range" id="fxBeat" min="30" max="180" value="100"></div>
+    </aside>
+  </div>
+
+  <!-- ======== 3D SHELF ======== -->
+  <section class="shelf-sec">
+    <p class="sec-label"><b>3D 歌单架</b> PLAYLIST SHELF · 把歌单摆成一排会发光的架子，点一张直接播</p>
+    <div class="shelf-viewport"><div class="shelf" id="shelf"></div></div>
+  </section>
+
+  <!-- ======== MODE TABS ======== -->
+  <div class="mode-tabs" role="tablist">
+    <button class="mode-tab active" id="tabMusic" onclick="switchMode('music')">音乐舞台<small>歌曲 · 歌单 · 平台聚合</small></button>
+    <button class="mode-tab" id="tabMV" onclick="switchMode('mv')">MV / 视频影院<small>原始格式 · 原始分辨率直通</small></button>
+  </div>
+
+  <!-- ======== MUSIC ======== -->
+  <section id="musicSection">
+    <section class="plat-sec">
+      <p class="sec-label"><b>8 平台聚合</b> SOURCES · 点平台只看它的歌，点未连接平台去授权</p>
+      <div class="plat-strip" id="platformStrip"></div>
+    </section>
+
+    <div class="glass card" id="connectWizard" style="margin-bottom:16px">
+      <h2>连接向导 <small>借鉴 Mineradio 的连接原理 · 本站不在本站输入任何平台密码</small></h2>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="wizSteps">
+        <div class="wiz-step" data-step="1" style="border:1px solid var(--accent);border-radius:14px;padding:13px 15px"><b>1 · 选平台</b><div style="font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.65">选一个音乐源，右侧列表会立刻清空旧内容、显示骨架屏，再加载新源——不出现新标题配旧内容。</div>
+        <select id="wizPlatSel" class="speed-sel" style="margin-top:9px;width:100%"></select></div>
+        <div class="wiz-step" data-step="2" style="border:1px solid var(--line);border-radius:14px;padding:13px 15px"><b>2 · 官方扫码登录</b><div style="font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.65">打开官方登录页扫码（网易云 / QQ / 酷狗 / 汽水扫码，QQ 可选 QQ 或微信扫码）。播放器只是一个窗口，凭证 Cookie 只留在官方页面与本机。</div>
+        <select id="wizIdentSel" class="speed-sel" style="margin-top:9px;width:100%;display:none" title="QQ 登录身份：QQ号与微信是两个独立身份，资产不互通">
+          <option value="qq">QQ号扫码登录 · 有歌单（推荐）</option>
+          <option value="wechat">微信扫码登录 · 独立身份（歌单为空时请切回QQ号）</option>
+        </select>
+        <a id="wizLoginLink" class="glass-btn solid" href="#" target="_blank" rel="noopener" style="text-decoration:none;margin-top:9px;min-height:40px">打开官方登录页 ↗</a></div>
+        <div class="wiz-step" data-step="3" style="border:1px solid var(--line);border-radius:14px;padding:13px 15px"><b>3 · 同步我的收藏</b><div style="font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.65">在官方页完成登录后回这里确认，只同步你已收藏的专辑 / 艺人 / 歌单，不翻全站目录。桌面版用内嵌登录窗真同步官网歌单；网页版读不到官网 Cookie，确认后只作本机标记，刷新后标记会重置。</div>
+        <button id="wizConfirmBtn" class="glass-btn" style="margin-top:9px;min-height:40px">我已在官方页完成登录</button></div>
+      </div>
+      <p id="wizStatus" style="font-size:13px;color:var(--gold);margin:12px 0 0;line-height:1.7">当前状态：全部平台未登录。不登录也能用——下方演示曲目、演示 MV 和本地文件导入都照常真实播放。</p>
+      <details style="margin-top:10px">
+        <summary style="cursor:pointer;font-size:13px;color:var(--ink2);font-weight:700">连接原理与音乐源端点表（八个源共用同一套抽象）</summary>
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.8;margin-top:8px">
+          <p style="margin:0 0 6px">· <b style="color:var(--ink2)">播放换源：</b>非 Apple 源走应用内播放链路；Spotify 官方不提供音频直链、汽水付费歌常只给试听——遇到试听 / VIP 时，6 秒内并行去其它已登录平台按「歌名 + 艺人 + 时长」匹配同一首歌自动换源，找不到就保留试听并明示。<br>
+          · <b style="color:var(--ink2)">歌词与音乐源分离：</b>歌词走 QQ → 酷狗 → 网易云独立回退链，歌词卡右上角会标出实际命中的来源。<br>
+          · <b style="color:var(--ink2)">本地兜底：</b>不登录任何平台，也能导入本地音频 / 视频按原始格式、原始分辨率播放。</p>
+          <div id="endpointTable"></div>
+        </div>
+      </details>
+    </div>
+    <div class="grid2">
+      <div class="glass card"><h2><span id="trackListTitle">统一搜索结果 · 歌曲</span> <small id="trackCount"></small></h2><div id="trackList"></div>
+        <div class="notice">版权说明：标有 <b style="color:var(--gold)">VIP / 会员</b> 的歌曲来自对应平台，受版权与会员限制。本页只能播放已授权的演示音频；点击未连接平台的 VIP 歌曲会提示先连接并用该平台账号授权，不能绕过付费或会员限制。</div>
+      </div>
+      <div>
+        <div class="glass card" id="platformCenter"><h2>平台中心 <small>状态如实显示 · 不假装已连接</small></h2><div id="platformList"></div>
+          <p class="notice">连接方式：网页版点右侧「官方登录 ↗」会打开该平台的官方网站，在官方页面里完成登录。本页读不到你的登录状态，所以不会显示假的「已连接」；各平台曲库请在其官方应用内播放。桌面版不同：点「登录账号」会打开内嵌官方登录窗扫码，登录后本机服务端用凭证真同步你的歌单（QQ号与微信是两个独立身份，分开显示）。本页真正能播的是：下方公开演示曲目、演示 MV，以及你导入的本地音频 / 视频文件。</p>
+        </div>
+        <div class="glass card" style="margin-top:16px"><h2>歌词 <small id="lyricSrcLabel">随舞台同步</small></h2><div class="lyrics-box" id="lyricsBox"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== THEATER ======== -->
+  <section id="mvSection" class="hidden">
+    <p class="sec-label"><b>MV / 视频影院</b> ORIGINAL PASSTHROUGH · Mineradio 没有的一块：原格式 · 原分辨率 · 不转码</p>
+    <div class="glass theater">
+      <div class="theater-screen">
+        <video id="mainVideo" controls playsinline preload="metadata" src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"></video>
+      </div>
+      <div class="meta-row">
+        <span class="meta-chip">原始分辨率 <b id="metaRes">读取中…</b></span>
+        <span class="meta-chip">原始格式 <b id="metaFmt">MP4</b></span>
+        <span class="meta-chip">来源 <b id="metaSrc">演示 MV</b></span>
+        <span class="meta-chip">处理 <b>不转码 · 不压缩 · 不裁切</b></span>
+      </div>
+      <div class="theater-bar">
+        <span id="mvTitle">For Bigger Fun — 欢乐大片演示 MV</span>
+        <button class="tbtn on" id="origBtn">原始分辨率直通</button>
+        <button class="tbtn" id="nativeBtn">1:1 原生尺寸</button>
+        <button class="tbtn" id="fsBtn">⛶ 全屏</button>
+        <button class="tbtn" id="pipBtn">画中画</button>
+        <button class="tbtn" id="mvPlayBtn">▶ 播放</button>
+        <select id="vidSpeedSel" class="speed-sel" title="视频倍速"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1.0× 倍速</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option></select>
+        <span id="qualitySel" class="tbtn" style="cursor:default;display:inline-flex;align-items:center" title="画质信息（片源只有原始一档，不做假切换）">画质 · 原始（源文件）</span>
+      </div>
+      <div class="dropzone" id="dropZone">
+        <b>把你自己的视频拖到这里，直接原画播放</b>
+        <p>MP4 / WebM / MOV / MKV / AVI 等文件在本机浏览器里直接解码播放——不上传、不转码、不缩放源文件，分辨率与格式保持原始状态。<br>浏览器原生解码不了的少数格式（如部分 MKV / AVI 编码），用下方桌面软件版（Electron + 完整解码）打开即可。</p>
+        <button class="pick" id="pickFileBtn">选择本地视频 / 音频文件</button>
+        <input type="file" id="localFile" accept="video/*,audio/*,.mkv,.avi,.mov,.webm,.m4v,.mp4" class="hidden">
+        <p id="localMeta" style="margin-top:10px;color:var(--gold)"></p>
+      </div>
+    </div>
+    <div class="mv-grid" id="mvGrid"></div>
+    <p class="notice">MV 说明：上方为可直接播放的演示 MV（公开样片源），播放时按源文件原始分辨率呈现，下方卡片标注的即为该片源信息。各平台正版 MV 同样受版权、地区与会员限制，未连接或无权限时会提示授权，不提供绕过方式。</p>
+  </section>
+
+  <!-- ======== DOWNLOAD · WEB + DESKTOP ======== -->
+  <section class="dl-sec" id="downloadSec">
+    <p class="sec-label"><b>网页版 + 软件版</b> EVERYWHERE · 同一套界面与功能，哪个系统都能用</p>
+    <div id="deviceHint">正在检测你当前的设备与浏览器…</div>
+    <div class="glass" style="margin-top:12px;padding:16px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:230px"><b style="font-size:15.5px">GitHub 公开仓库（源码已备好 · 待推送）· </b><a href="https://github.com/lzx-lgm/all-in-one-player" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">github.com/lzx-lgm/all-in-one-player</a>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.7">网页版完整源码（index.html / CSS / JS 分离）与 Electron 桌面工程已按这个仓库的结构整理就绪，右侧可直接下载源码包；推送到 GitHub 后，克隆下来 <span style="color:var(--ink2)">npm install</span> 即可运行，<span style="color:var(--ink2)">npm run dist:win / dist:mac / dist:linux</span> 分别打出 .exe / .dmg / .AppImage 安装包。</div></div>
+      <a class="glass-btn solid" href="https://github.com/lzx-lgm/all-in-one-player/releases" target="_blank" rel="noopener" style="text-decoration:none;min-height:44px">Releases · 三个系统安装包 ↓</a>
+      <a class="glass-btn" href="https://github.com/lzx-lgm/all-in-one-player/archive/refs/heads/main.zip" download style="text-decoration:none;min-height:44px">下载项目源码包 .zip</a>
+    </div>
+    <div class="pwa-banner glass">
+      <div class="pb-t"><b>网页版（现在就能用）— 全系统浏览器适配 + 可安装</b>
+      <p>Windows / macOS / Linux 桌面浏览器与 Android / iOS 手机浏览器打开即用，界面按屏幕尺寸自动排版；还能安装到桌面：像 App 一样独立窗口、全屏沉浸打开，已打开过的内容可离线再进。</p></div>
+      <button class="glass-btn solid installBtn" style="min-height:46px;padding:0 20px">⤓ 安装网页版到桌面</button>
+      <button class="glass-btn" id="pwaHowBtn" style="min-height:46px">我的浏览器怎么装？</button>
+    </div>
+    <div class="dl-grid" style="margin-top:14px">
+      <div class="glass dl-card">
+        <div class="os-mark">WINDOWS</div>
+        <h3>Windows <span>软件版</span></h3>
+        <p>Windows 10 / 11（64 位）桌面版，Electron 封装同一套网页版：8 平台聚合、音乐 + MV、原格式 / 原分辨率视频（含更多本地解码）、歌词舞台、粒子视觉、3D 歌单架，功能与网页版一致。</p>
+        <div class="fmt"><span class="badge orig">安装包 .exe</span><span class="badge">NSIS 安装向导</span><span class="badge">支持自动更新</span></div>
+        <a class="go" href="https://github.com/lzx-lgm/all-in-one-player/releases" target="_blank" rel="noopener">发布后去 Releases 下载 Windows 版 · .exe ↓</a>
+      </div>
+      <div class="glass dl-card">
+        <div class="os-mark">MACOS</div>
+        <h3>macOS <span>软件版</span></h3>
+        <p>macOS 12 及以上，Universal 通用包同时支持 Apple Silicon（M 系列）与 Intel 芯片。拖进「应用程序」即装好，菜单栏播放控制、桌面歌词与沉浸全屏都和网页版同一套体验。</p>
+        <div class="fmt"><span class="badge orig">安装包 .dmg</span><span class="badge">Universal 通用</span><span class="badge">M 系列 / Intel</span></div>
+        <a class="go" href="https://github.com/lzx-lgm/all-in-one-player/releases" target="_blank" rel="noopener">发布后去 Releases 下载 macOS 版 · .dmg ↓</a>
+      </div>
+      <div class="glass dl-card">
+        <div class="os-mark">LINUX</div>
+        <h3>Linux <span>软件版</span></h3>
+        <p>主流发行版通用：AppImage 免安装双击即跑；Debian / Ubuntu 系用 .deb 一键安装。同样是 Electron 封装同一套界面，歌单、视觉预设与本地原画播放全保留。</p>
+        <div class="fmt"><span class="badge orig">.AppImage</span><span class="badge orig">.deb</span><span class="badge">Ubuntu / Debian / Fedora*</span></div>
+        <a class="go" href="https://github.com/lzx-lgm/all-in-one-player/releases" target="_blank" rel="noopener">发布后去 Releases 下载 Linux 版 · .AppImage / .deb ↓</a>
+      </div>
+    </div>
+    <div class="parity">
+      <div><b>功能一致</b><span>网页版与三个桌面版同一套代码（Electron 封装），8 平台聚合、歌词舞台、粒子视觉、3D 歌单架处处相同。</span></div>
+      <div><b>原画播放一致</b><span>MV / 视频原始格式、原始分辨率直通；桌面版解码更全，MKV / AVI 等格式也能播。</span></div>
+      <div><b>全屏沉浸一致</b><span>网页版可全屏 / 安装后独立窗口打开；桌面版原生全屏与桌面模式，视觉舞台铺满整屏。</span></div>
+      <div><b>手机也能用</b><span>Android / iOS 用浏览器打开网页版即可，或「添加到主屏幕」当 App 用，不必装软件版。</span></div>
+    </div>
+    <p class="notice">* Fedora 等 RPM 系可使用 .AppImage 通用包。三个系统的安装包都发布在 GitHub 仓库的 Releases 页：仓库代码打上版本标签（如 v1.0.0）后，GitHub Actions 会在 Windows / macOS / Linux 三台构建机上分别打包并自动上传到 Releases，点上方按钮即可到达下载位置。</p>
+  </section>
+
+  <footer>OmniRadio+ · 视觉舞台学 Mineradio，影院这一块走得比它更远：原格式 · 原分辨率 · 不转码。<br>演示音频 / 视频为公开样片源；各平台内容版权归各自平台与权利方所有。</footer>
+</div>
+
+<!-- ======== BOTTOM PLAYER ======== -->
+<div class="player"><div class="player-inner">
+  <div class="progress"><span id="curTime">0:00</span><input type="range" class="seek" id="seek" min="0" max="100" value="0"><span id="durTime">6:12</span></div>
+  <div class="controls">
+    <div class="now"><div class="ncov" id="nowCov" style="background:linear-gradient(135deg,#1DB954,#00F5D4)">N</div><div style="min-width:0"><b id="nowTitle">Neon Skyline — 星际漫游</b><span id="nowArtist">Luna Waves · Spotify</span></div></div>
+    <button class="ctrl hide-s" id="shuffleBtn" title="随机播放">⤨</button>
+    <button class="ctrl" id="prevBtn" title="上一首">⏮</button>
+    <button class="ctrl main" id="playBtn" title="播放 / 暂停">▶</button>
+    <button class="ctrl" id="nextBtn" title="下一首">⏭</button>
+    <button class="ctrl hide-s" id="repeatBtn" title="循环模式：关 → 全部 → 单曲">↻</button>
+    <select id="speedSel" class="speed-sel" title="倍速"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1.0× 倍速</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option></select>
+    <div class="vol-wrap"><span>音量</span><input type="range" id="vol" min="0" max="100" value="80"></div>
+    <button class="ctrl pill" id="modeBtn">MV 影院</button>
+  </div>
+</div></div>
+
+<!-- ======== AUTH MODAL ======== -->
+<div class="modal" id="authModal"><div class="modal-box">
+  <span class="badge orig" id="modalPlat">平台授权</span>
+  <h3 id="modalTitle">前往平台官方授权</h3>
+  <p id="modalText"></p>
+  <a class="mbtn" id="authLink" href="#" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;text-decoration:none">打开官方页面 ↗</a>
+  <button class="mbtn ghost" onclick="closeModal()">先不了，继续用本页可播内容</button>
+  <p style="font-size:12px">实话说明：第三方平台的账号授权需要平台官方 OAuth 与后端服务配合，这个页面无法替你完成登录，也不会把状态假装成「已连接」。在官方页面登录后，请在其官方客户端 / 网页版播放该平台曲库；本页的公开演示曲目、演示 MV 与你导入的本地文件不受影响，照常真实播放。</p>
+</div></div>
+
+<!-- ======== DOWNLOAD / INSTALL MODAL ======== -->
+<div class="modal" id="dlModal"><div class="modal-box">
+  <span class="badge orig" id="dlPlat">软件版</span>
+  <h3 id="dlTitle">获取软件版</h3>
+  <div id="dlBody"></div>
+  <button class="mbtn installBtn">⤓ 先安装网页版（立即可用）</button>
+  <button class="mbtn ghost" onclick="closeDl()">关闭</button>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<audio id="audio" crossorigin="anonymous" preload="metadata"></audio>
+<script src="js/app.js"></script>
+</body>
+</html>
