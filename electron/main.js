@@ -32,6 +32,7 @@ let httpServer = null;
 let serverPort = 0;
 let mainWin = null;
 let authDir = '';
+let trayModeEnabled = false;
 
 function authDirFor() {
   return path.join(app.getPath('userData'), 'auth');
@@ -182,6 +183,10 @@ function createWindow() {
   });
   if (serverPort) win.loadURL('http://127.0.0.1:' + serverPort + '/');
   else win.loadFile(path.join(ROOT_DIR, 'index.html'));
+  // 托盘模式开着时，点关闭只是藏进托盘，不退出
+  win.on('close', function (e) {
+    if (trayModeEnabled) { e.preventDefault(); win.hide(); }
+  });
   return win;
 }
 
@@ -209,6 +214,41 @@ function registerIpc() {
   ipcMain.handle('desktop:open-external', async function (_e, url) {
     await shell.openExternal(url);
     return { ok: true };
+  });
+  // 后台托盘：开 = 点关闭时窗口藏进托盘（托盘菜单：显示窗口 / 退出）；关 = 直接退出
+  let tray = null;
+  ipcMain.handle('desktop:tray-mode', async function (_e, on) {
+    trayModeEnabled = !!on;
+    if (trayModeEnabled && !tray) {
+      const { Tray, Menu } = require('electron');
+      tray = new Tray(path.join(__dirname, '..', 'build', 'icon.png'));
+      tray.setToolTip('全能播放器 OmniRadio+');
+      tray.setContextMenu(Menu.buildFromTemplate([
+        { label: '显示窗口', click: function () { if (mainWin && !mainWin.isDestroyed()) { mainWin.show(); mainWin.focus(); } } },
+        { label: '退出', click: function () { trayModeEnabled = false; try { if (tray) tray.destroy(); } catch (e) {} app.quit(); } }
+      ]));
+      tray.on('click', function () { if (mainWin && !mainWin.isDestroyed()) { mainWin.show(); mainWin.focus(); } });
+    }
+    if (!trayModeEnabled && tray) { try { tray.destroy(); } catch (e) {} tray = null; }
+    return { ok: true, trayMode: trayModeEnabled };
+  });
+  // 桌面歌词小窗：置顶小窗，只显示当前一句歌词（主窗口推送歌词行过来）
+  let lyricWin = null;
+  ipcMain.handle('desktop:lyrics-window', async function (_e, show) {
+    if (show && !lyricWin) {
+      lyricWin = new BrowserWindow({
+        width: 560, height: 110, frame: false, alwaysOnTop: true, resizable: true,
+        transparent: true, skipTaskbar: true,
+        // 小窗只加载本应用自己的 data: 页面（无任何远程代码），允许它直接收歌词行
+        webPreferences: { nodeIntegration: true, contextIsolation: false }
+      });
+      lyricWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;font-family:"Noto Serif SC",sans-serif}body{font-size:22px;font-weight:900;text-align:center;padding:0 18px;text-shadow:0 0 18px rgba(0,245,212,.8);-webkit-app-region:drag}</style></head><body><div id="l">全能播放器 · 桌面歌词</div><script>const {ipcRenderer}=require("electron");ipcRenderer.on("lyric-line",(_e,t)=>{document.getElementById("l").textContent=t||""})</script></body></html>'));
+      lyricWin.on('closed', function () { lyricWin = null; });
+    } else if (!show && lyricWin) { try { lyricWin.close(); } catch (e) {} lyricWin = null; }
+    return { ok: true, open: !!lyricWin };
+  });
+  ipcMain.on('desktop:lyric-line', function (_e, line) {
+    if (lyricWin && !lyricWin.isDestroyed()) lyricWin.webContents.send('lyric-line', line);
   });
   ipcMain.handle('desktop:auth-dir', async function () { return authDir; });
 }

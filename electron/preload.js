@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   loginRetry: function (platform, identity) { return ipcRenderer.invoke('desktop:login-retry', platform, identity); },
   logout: function (platform, identity) { return ipcRenderer.invoke('desktop:logout', platform, identity); },
   openExternal: function (url) { return ipcRenderer.invoke('desktop:open-external', url); },
+  setTrayMode: function (on) { return ipcRenderer.invoke('desktop:tray-mode', on); },
+  lyricsWindow: function (show) { return ipcRenderer.invoke('desktop:lyrics-window', show); },
+  sendLyric: function (line) { ipcRenderer.send('desktop:lyric-line', line); },
   onLoginEvent: function (cb) {
     ipcRenderer.on('desktop:login-done', function (_e, p) { cb('login-done', p); });
     ipcRenderer.on('desktop:login-qr-blank', function (_e, p) { cb('login-qr-blank', p); });
