@@ -2,7 +2,7 @@
 // 渲染层只能通过这里暴露的白名单调用主进程：
 // 登录（打开内嵌官方登录窗）、登出、登录状态、重新登录、打开外链、
 // 以及订阅主进程发来的登录事件。凭证值永不经过这座桥传给渲染层。
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('desktopAPI', {
   isDesktop: true,
@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   loginRetry: function (platform, identity) { return ipcRenderer.invoke('desktop:login-retry', platform, identity); },
   logout: function (platform, identity) { return ipcRenderer.invoke('desktop:logout', platform, identity); },
   openExternal: function (url) { return ipcRenderer.invoke('desktop:open-external', url); },
+  // 本地文件真实路径（只给主进程用，不进任何日志）；外挂播放器与 ffprobe 媒体信息用它
+  filePath: function (file) { try { return webUtils.getPathForFile(file); } catch (e) { return ''; } },
+  openFilePlayer: function (filePath) { return ipcRenderer.invoke('desktop:open-file-player', filePath); },
+  mediaInfo: function (filePath) { return ipcRenderer.invoke('desktop:media-info', filePath); },
   setTrayMode: function (on) { return ipcRenderer.invoke('desktop:tray-mode', on); },
   lyricsWindow: function (show) { return ipcRenderer.invoke('desktop:lyrics-window', show); },
   sendLyric: function (line) { ipcRenderer.send('desktop:lyric-line', line); },

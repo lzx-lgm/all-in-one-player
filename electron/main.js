@@ -320,6 +320,31 @@ function registerIpc() {
     await shell.openExternal(url);
     return { ok: true };
   });
+  // PotPlayer 式兜底：浏览器解不了的本地视频，交给系统默认播放器（装了 PotPlayer 就是它）
+  ipcMain.handle('desktop:open-file-player', async function (_e, filePath) {
+    if (typeof filePath !== 'string' || !filePath || !fs.existsSync(filePath)) return { ok: false, reason: '文件不存在或路径无效' };
+    const err = await shell.openPath(filePath);
+    if (err) return { ok: false, reason: err };
+    return { ok: true };
+  });
+  // 媒体信息：用 ffprobe（系统装了才有）读容器/编码/帧率/码率；没装就如实返回不可用
+  ipcMain.handle('desktop:media-info', async function (_e, filePath) {
+    if (typeof filePath !== 'string' || !filePath || !fs.existsSync(filePath)) return { ok: false, reason: '文件不存在或路径无效' };
+    try {
+      const { execFile } = require('child_process');
+      const out = await new Promise(function (resolve, reject) {
+        execFile('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', filePath],
+          { timeout: 8000, maxBuffer: 1024 * 1024 }, function (err, stdout) { if (err) reject(err); else resolve(stdout); });
+      });
+      const info = JSON.parse(out);
+      const streams = (info.streams || []).map(function (s) {
+        return { type: s.codec_type, codec: s.codec_name, width: s.width, height: s.height, fps: s.r_frame_rate, bitrate: s.bit_rate, channels: s.channels, language: s.tags && s.tags.language, title: s.tags && s.tags.title };
+      });
+      return { ok: true, format: info.format && info.format.format_name, duration: info.format && info.format.duration, size: info.format && info.format.size, bitrate: info.format && info.format.bit_rate, streams: streams };
+    } catch (e) {
+      return { ok: false, reason: (e && e.code === 'ENOENT') ? 'no_ffprobe' : 'probe_failed' };
+    }
+  });
   // 后台托盘：开 = 点关闭时窗口藏进托盘（托盘菜单：显示窗口 / 退出）；关 = 直接退出
   let tray = null;
   ipcMain.handle('desktop:tray-mode', async function (_e, on) {
