@@ -1,66 +1,153 @@
 {
   "name": "all-in-one-player",
-  "version": "1.0.11",
-  "private": false,
-  "description": "全能播放器 OmniRadio+：Mineradio 式沉浸视觉舞台 + 8 平台聚合音乐，独有 MV/视频原始格式、原始分辨率直通播放。网页版（PWA）与 Electron 桌面版同一套代码。",
-  "homepage": "https://github.com/lzx-lgm/all-in-one-player",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/lzx-lgm/all-in-one-player.git"
-  },
-  "license": "GPL-3.0",
-  "author": "lzx-lgm <2221278893@qq.com>",
-  "main": "electron/main.js",
+  "productName": "全能播放器",
+  "version": "2.0.0",
+  "description": "全能音乐+视频播放器：八大音乐平台 + MV/视频影院，基于 Mineradio（GPL-3.0）二次开发。",
+  "author": "all-in-one-player",
+  "license": "GPL-3.0-only",
+  "main": "desktop/main.js",
+  "private": true,
   "scripts": {
     "start": "electron .",
-    "check": "node --check electron/main.js && node --check electron/server.js && node --check electron/preload.js && node --check js/app.js && echo syntax-ok",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "dist:win": "electron-builder --win nsis",
-    "dist:mac": "electron-builder --mac dmg",
-    "dist:linux": "electron-builder --linux AppImage deb"
-  },
-  "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.0"
+    "build:win": "electron-builder --win nsis",
+    "build:win:dir": "electron-builder --win dir",
+    "build:win:internal-beta": "electron-builder --config electron-builder.internal-beta.json --win nsis --publish never",
+    "build:mac": "electron-builder --mac dmg",
+    "build:linux": "electron-builder --linux AppImage deb",
+    "check": "node --check server.js && node --check desktop/main.js && node --check desktop/preload.js && node --check kuwo-api.js && node --check ytmusic-api.js && node --check apple-api.js && node --check public/sw.js && node --check public/js/modules/12-cinema/00-cinema-player.js && node --check public/js/modules/13-web/00-pwa-register.js"
   },
   "build": {
-    "appId": "com.lzxlgm.allinoneplayer",
-    "productName": "AllInOnePlayer",
-    "publish": null,
+    "appId": "com.all-in-one-player.desktop",
+    "productName": "全能播放器",
     "directories": {
-      "output": "release"
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "afterPack": "build/after-pack.js",
+    "toolsets": {
+      "winCodeSign": "1.1.0"
     },
     "files": [
-      "index.html",
-      "css/**",
-      "js/**",
-      "assets/**",
-      "electron/**",
-      "package.json"
+      "desktop/**/*",
+      "public/**/*",
+      "build/**/*",
+      "cuefield/**/*",
+      "server.js",
+      "*-api.js",
+      "qishui-auth-v6.js",
+      "qishui-qr-login.js",
+      "qishui-auth-v6/**/*",
+      "qishui-audio-decryptor/**/*",
+      "dj-analyzer.js",
+      "LICENSE",
+      "NOTICE.md",
+      "docs/THIRD_PARTY_PORTS.md",
+      "package.json",
+      "!desktop/wallpaper-preload.js",
+      "!public/wallpaper.html",
+      "!public/index.*.html",
+      "public/index.html"
     ],
+    "asar": false,
     "win": {
-      "target": "nsis",
-      "artifactName": "${productName}-Setup-${version}.exe"
+      "executableName": "AllInOnePlayer",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "全能播放器",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/installerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp",
+      "include": "build/installer.nsh",
+      "artifactName": "全能播放器-${version}-Setup.${ext}"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "lzx-lgm",
+        "repo": "all-in-one-player"
+      }
+    ],
     "mac": {
-      "target": "dmg",
-      "category": "public.app-category.music",
-      "artifactName": "${productName}-${version}-universal.dmg"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "artifactName": "全能播放器-${version}-${arch}.${ext}",
+      "category": "public.app-category.music"
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb"
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "maintainer": "lzx-lgm <2221278893@qq.com>",
-      "category": "AudioVideo",
-      "artifactName": "${productName}-${version}.${ext}"
+      "icon": "build/icon.png",
+      "artifactName": "全能播放器-${version}-${arch}.${ext}",
+      "category": "Music"
     }
+  },
+  "mineradio": {
+    "update": {
+      "provider": "github",
+      "owner": "XxHuberrr",
+      "repo": "Mineradio",
+      "preview": false,
+      "preferMirrors": true,
+      "mirrors": [
+        "https://gh.llkk.cc/",
+        "https://ghfast.top/",
+        "https://gh-proxy.com/"
+      ]
+    }
+  },
+  "dependencies": {
+    "gsap": "^3.15.0",
+    "mpg123-decoder": "^1.0.3",
+    "music-metadata": "11.14.0",
+    "NeteaseCloudMusicApi": "^4.32.0",
+    "qrcode": "^1.5.4",
+    "youtubei.js": "^18.3.0"
+  },
+  "overrides": {
+    "axios": "1.18.1",
+    "body-parser": "1.20.6",
+    "music-metadata": "11.14.0"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
+    "rcedit": "^5.0.2"
   }
 }
