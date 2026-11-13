@@ -1,7 +1,9 @@
 name: Build & Release (Windows / macOS / Linux)
 
 # 打版本标签即触发三系统打包，并把安装包发布到 GitHub Releases
-# 例：git tag v1.0.0 && git push origin v1.0.0
+# 例：git tag v2.0.0 && git push origin v2.0.0
+# 也可以在 Actions 里手动触发（workflow_dispatch）先打一套安装包验证，
+# 验证通过后再打标签正式发布。
 on:
   push:
     tags: ['v*']
@@ -19,11 +21,11 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            script: dist:win
+            script: build:win
           - os: macos-latest
-            script: dist:mac
+            script: build:mac
           - os: ubuntu-latest
-            script: dist:linux
+            script: build:linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -37,10 +39,10 @@ jobs:
         with:
           name: installer-${{ matrix.os }}
           path: |
-            release/*.exe
-            release/*.dmg
-            release/*.AppImage
-            release/*.deb
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
           if-no-files-found: error
 
   # 三个系统都打完后，由单独一个任务统一发布，避免三个任务同时
@@ -58,4 +60,3 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: dist/*
-          fail_on_unmatched_files: true
