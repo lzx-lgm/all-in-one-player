@@ -1,0 +1,10 @@
+node_modules/
+release/
+dist/
+.DS_Store
+*.log
+# 登录凭证只保存在本机 userData 目录，永不进仓库（双重保险）：
+auth/
+**/.cookie
+**/*-cookies.json
+**/*.cookie
