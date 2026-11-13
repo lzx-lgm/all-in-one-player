@@ -18,9 +18,22 @@ const PORT = Number(process.env.ALLINONE_PORT || 0); // 0 = 系统分配临时�
 const LOGIN_URLS = {
   qishui: 'https://www.qishui.com/', spotify: 'https://open.spotify.com/',
   apple: 'https://music.apple.com/', youtube: 'https://music.youtube.com/',
-  qq: 'https://y.qq.com/', netease: 'https://music.163.com/#/login',
+  // QQ 入口照 Mineradio：先开个人页（能拿到登录态），打不开再回退到首页
+  qq: 'https://y.qq.com/n/ryqq/profile', netease: 'https://music.163.com/#/login',
   kugou: 'https://www.kugou.com/', kuwo: 'https://www.kuwo.cn/'
 };
+const QQ_FALLBACK_URL = 'https://y.qq.com/';
+const QQ_WARMUP_URL = 'https://y.qq.com/n/ryqq/player';
+// QQ 登录允许在应用内弹窗的官方域（其余外链仍走系统浏览器）
+const QQ_TRUSTED_DOMAINS = ['qq.com', 'tencent.com', 'qqmusic.com', 'gtimg.com', 'qpic.cn', 'weixin.qq.com'];
+function isTrustedQQUrl(targetUrl) {
+  try {
+    const parsed = new URL(String(targetUrl || ''));
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return QQ_TRUSTED_DOMAINS.some(function (d) { return host === d || host.endsWith('.' + d); });
+  } catch (e) { return false; }
+}
 const LOGIN_HINTS = {
   qq: 'QQ登录页签二维码如空白：点「重试」重开，或先切「微信登录」页签再切回 QQ，或复制链接到浏览器扫码。残留会话可能直接快捷登录回已登录账号。',
   netease: '网易云登录页用网易云音乐 App 或微信扫码；扫完在手机上确认。',
@@ -47,7 +60,7 @@ function cookieDomains(platform) {
   return serverMod && serverMod.ADAPTERS[platform] ? serverMod.ADAPTERS[platform].domains : [];
 }
 
-async function harvestCookies(platform, identity) {
+async function readCookieMap(platform, identity) {
   const ses = session.fromPartition(partitionFor(platform, identity));
   const domains = cookieDomains(platform);
   const found = {};
@@ -57,6 +70,20 @@ async function harvestCookies(platform, identity) {
       list.forEach(function (c) { found[c.name] = c.value; });
     } catch (e) { /* 某个域取不到就跳过，不记敏感内容 */ }
   }
+  return found;
+}
+
+// QQ 只拿到 uin 不算能播：播放要 qqmusic_key 或 qm_keyst。Mineradio 的做法是
+// 先用登录态换播放凭证（暖身页），拿不到就等，超时才退回只认 uin。
+function qqPlaybackReady(found) {
+  return !!(found && (found.qqmusic_key || found.qm_keyst));
+}
+function qqLoginOnly(found) {
+  return !!(found && found.uin && !qqPlaybackReady(found));
+}
+
+async function harvestCookies(platform, identity) {
+  const found = await readCookieMap(platform, identity);
   const keys = requiredKeys(platform);
   const ok = keys.length > 0 && keys.every(function (k) { return found[k]; });
   if (ok) {
@@ -81,23 +108,47 @@ function openLoginWindow(platform, identity) {
   try {
     ses.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36');
   } catch (e) {}
+  // 窗口先不显示，等 ready-to-show 再现身（深色底），不闪白屏
   const win = new BrowserWindow({
-    width: 520, height: 680, title: '登录 · ' + (serverMod.ADAPTERS[platform] ? serverMod.ADAPTERS[platform].label : platform),
-    parent: mainWin || undefined, modal: false,
-    backgroundColor: '#0a0a0f',
-    webPreferences: { partition: partitionFor(platform, identity), contextIsolation: true, nodeIntegration: false }
+    width: 900, height: 720, minWidth: 760, minHeight: 560, title: '登录 · ' + (serverMod.ADAPTERS[platform] ? serverMod.ADAPTERS[platform].label : platform),
+    parent: mainWin || undefined, modal: false, show: false,
+    backgroundColor: '#111111',
+    webPreferences: { partition: partitionFor(platform, identity), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   win.setMenuBarVisibility(false);
+  const showLoginWindow = function () {
+    if (!win.isDestroyed() && !win.isVisible()) { try { win.show(); win.focus(); } catch (e) {} }
+  };
+  win.on('ready-to-show', showLoginWindow);
+  const showWatchdog = setTimeout(showLoginWindow, 2500);
   win.loadURL(url);
-  // 外链仍走系统浏览器
+  // QQ 官方域的弹窗留在应用内（同 partition，扫码登录的弹窗就靠它），
+  // 其余外链仍走系统浏览器
   win.webContents.setWindowOpenHandler(function (h) {
+    if (platform === 'qq' && isTrustedQQUrl(h.url)) {
+      return { action: 'allow', overrideBrowserWindowOptions: {
+        width: 760, height: 640, parent: win, modal: false, show: true, autoHideMenuBar: true,
+        backgroundColor: '#111111',
+        webPreferences: { partition: partitionFor(platform, identity), contextIsolation: true, nodeIntegration: false, sandbox: true }
+      } };
+    }
     if (h.url.startsWith('http')) { shell.openExternal(h.url); return { action: 'deny' }; }
     return { action: 'allow' };
   });
+  // 网易云：页面加载完 900ms 后自动点一下「登录」，二维码自己弹出来
+  if (platform === 'netease') {
+    win.webContents.on('did-finish-load', function () {
+      win.webContents.executeJavaScript(
+        "setTimeout(function(){var nodes=Array.from(document.querySelectorAll('a, button, span, div'));var n=nodes.find(function(x){var t=(x.textContent||'').trim();if(!/登录|立即登录/.test(t))return false;var r=x.getBoundingClientRect();return r.width>0&&r.height>0});if(n)n.click();},900);",
+        true
+      ).catch(function () {});
+    });
+  }
   // 登录窗空白/崩溃自救：页面加载失败或渲染进程崩溃时，先自动重载一次，
   // 还不行就弹原生对话框，给「在浏览器打开」兜底（浏览器里扫码同样能登录，
   // 凭证仍只存在官方页与本机）。
   let reloads = 0;
+  let fallbackUsed = false;
   let failDialogOpen = false;
   const offerFallback = async function (reason) {
     if (win.isDestroyed() || failDialogOpen || done) return;
@@ -117,9 +168,16 @@ function openLoginWindow(platform, identity) {
     } catch (e) {}
     failDialogOpen = false;
   };
-  win.webContents.on('did-fail-load', function (_e, code, desc) {
+  win.webContents.on('did-fail-load', async function (_e, code, desc) {
     if (done || win.isDestroyed()) return;
     if (code === -3) return; // 用户主动中止，不算失败
+    // QQ 入口页协议类失败：先清缓存，再回退到 QQ 首页
+    if (platform === 'qq' && !fallbackUsed && /HTTP2|PROTOCOL_ERROR|ERR_FAILED/i.test(String(desc || '') + ' ' + code)) {
+      fallbackUsed = true;
+      try { await ses.clearCache(); } catch (e) {}
+      try { win.loadURL(QQ_FALLBACK_URL); } catch (e) {}
+      return;
+    }
     if (reloads < 1) { reloads++; try { win.loadURL(url); } catch (e) {} return; }
     offerFallback('加载失败 ' + code + ' ' + desc);
   });
@@ -131,16 +189,57 @@ function openLoginWindow(platform, identity) {
 
   let done = false;
   let blankNotified = false;
+  let warmupWindow = null;
+  let warmupTimer = null;
+  let finalizePending = false;
   const startAt = Date.now();
+  const closeWarmup = function () {
+    if (warmupTimer) { clearTimeout(warmupTimer); warmupTimer = null; }
+    if (warmupWindow && !warmupWindow.isDestroyed()) { try { warmupWindow.close(); } catch (e) {} }
+    warmupWindow = null;
+  };
   const finish = async function (how) {
-    if (done) return;
+    if (done) return false;
+    // QQ：只拿到 uin 还不能播，要等播放凭证；超过 25 秒仍没有才退回只认 uin
+    if (platform === 'qq') {
+      const found = await readCookieMap(platform, identity);
+      const hasLogin = !!(found && found.uin);
+      if (hasLogin && !qqPlaybackReady(found) && Date.now() - startAt < 25000) return false;
+    }
     const r = await harvestCookies(platform, identity);
     if (r.ok) {
+      if (finalizePending) return false;
+      finalizePending = true;
+      // Cookie 是一阵一阵写进来的，等 450ms 再读一次最终版
+      await new Promise(function (resolveDelay) { setTimeout(resolveDelay, 450); });
+      await harvestCookies(platform, identity);
+      try { await ses.flushStorageData(); } catch (e) {}
       done = true;
+      clearTimeout(showWatchdog);
+      closeWarmup();
       try { win.close(); } catch (e) {}
       notifyMain('desktop:login-done', { platform: platform, identity: identity, ok: true, how: how });
+      return true;
     }
     return r.ok;
+  };
+  // QQ 暖身：只拿到登录态、没有播放凭证时，另开一个隐藏窗在同 partition 里
+  // 打开 QQ 播放器页，让官网把登录态换成播放凭证（qm_keyst / qqmusic_key）。
+  // 隐藏窗绝不替换登录回调页，扫码流程不受影响。
+  const scheduleWarmup = function () {
+    if (done || warmupTimer || warmupWindow || platform !== 'qq') return;
+    warmupTimer = setTimeout(function () {
+      warmupTimer = null;
+      if (done || win.isDestroyed()) return;
+      warmupWindow = new BrowserWindow({
+        width: 720, height: 520, parent: win, modal: false, show: false, autoHideMenuBar: true,
+        backgroundColor: '#111111',
+        webPreferences: { partition: partitionFor(platform, identity), contextIsolation: true, nodeIntegration: false, sandbox: true }
+      });
+      warmupWindow.on('closed', function () { warmupWindow = null; });
+      warmupWindow.webContents.on('did-finish-load', function () { finish('warmup'); });
+      warmupWindow.loadURL(QQ_WARMUP_URL).catch(function (e) { console.warn('QQ warmup navigation failed:', e.message); });
+    }, 5000);
   };
   // 导航到已登录落地页 / 轮询 Cookie：残留会话快捷登录也会被这里捕获
   win.webContents.on('did-navigate', function () { finish('navigate'); });
@@ -149,6 +248,12 @@ function openLoginWindow(platform, identity) {
     if (win.isDestroyed()) { clearInterval(timer); return; }
     const ok = await finish('poll');
     if (ok) { clearInterval(timer); return; }
+    if (platform === 'qq') {
+      try {
+        const found = await readCookieMap(platform, identity);
+        if (qqLoginOnly(found)) scheduleWarmup();
+      } catch (e) {}
+    }
     // QQ 二维码空白提示：登录页停留 12 秒仍无凭证
     const elapsed = Date.now() - startAt;
     if (!blankNotified && elapsed > 12000) {
@@ -160,7 +265,7 @@ function openLoginWindow(platform, identity) {
       });
     }
   }, 2000);
-  win.on('closed', function () { clearInterval(timer); notifyMain('desktop:login-closed', { platform: platform, identity: identity }); });
+  win.on('closed', function () { clearInterval(timer); clearTimeout(showWatchdog); closeWarmup(); notifyMain('desktop:login-closed', { platform: platform, identity: identity }); });
   return win;
 }
 

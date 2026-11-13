@@ -300,6 +300,52 @@ function createServer(rootDir, authDir) {
         res.end(JSON.stringify(Object.assign({ platform: platform, identity: identity }, result)));
         return;
       }
+      // ---- 音频/视频代理（只走桌面版；网页版没有本机服务，用直链）
+      // 原理照 Mineradio：浏览器不直接拿远程音源——部分平台会按 Referer 拒掉
+      // 直链请求，拖进度还需要 Range。本机服务代取，带上对应平台的 Referer，
+      // 原样透传 Range / 206，上游 9 秒超时，失败返回 502/504（不伪造成功）。
+      if (u.pathname === '/api/audio') {
+        const audioUrl = u.searchParams.get('url') || '';
+        let target = null;
+        try { target = new URL(audioUrl); } catch (e) { target = null; }
+        if (!target || (target.protocol !== 'http:' && target.protocol !== 'https:')) {
+          res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('Bad url'); return;
+        }
+        const host = target.hostname.toLowerCase();
+        let referer = '';
+        if (host.indexOf('qq.com') >= 0 || host.indexOf('qpic.cn') >= 0) referer = 'https://y.qq.com/';
+        else if (host.indexOf('163.com') >= 0 || host.indexOf('netease') >= 0) referer = 'https://music.163.com/';
+        else if (host.indexOf('kugou.com') >= 0) referer = 'https://www.kugou.com/';
+        else if (host.indexOf('kuwo.cn') >= 0) referer = 'https://www.kuwo.cn/';
+        else if (host.indexOf('qishui.com') >= 0 || host.indexOf('douyin') >= 0 || host.indexOf('byteimg.com') >= 0) referer = 'https://www.qishui.com/';
+        else if (host.indexOf('music.youtube.com') >= 0 || host.indexOf('googlevideo.com') >= 0) referer = 'https://music.youtube.com/';
+        const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' };
+        if (referer) headers.Referer = referer;
+        if (req.headers.range) headers.Range = req.headers.range;
+        const ctrl = new AbortController();
+        const to = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 9000);
+        let up;
+        try {
+          up = await fetch(target.toString(), { headers: headers, signal: ctrl.signal });
+        } catch (e) {
+          clearTimeout(to);
+          res.writeHead(504, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }); res.end('Upstream timeout'); return;
+        }
+        clearTimeout(to);
+        if (!up.ok && up.status !== 206) {
+          res.writeHead(502, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }); res.end('Upstream ' + up.status); return;
+        }
+        const out = { 'Content-Type': up.headers.get('content-type') || 'application/octet-stream', 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' };
+        const cl = up.headers.get('content-length'); if (cl) out['Content-Length'] = cl;
+        const cr = up.headers.get('content-range'); if (cr) out['Content-Range'] = cr;
+        res.writeHead(up.status, out);
+        if (!up.body) { res.end(); return; }
+        try {
+          for await (const chunk of up.body) { if (res.writableEnded) break; res.write(chunk); }
+        } catch (e) { try { res.destroy(); } catch (e2) {} return; }
+        res.end();
+        return;
+      }
       // ---- 静态文件（网页版同一套代码；只允许公开的页面资源，拒绝其它文件）
       let filePath = u.pathname === '/' ? '/index.html' : u.pathname;
       const ALLOWED = ['/index.html'];
@@ -310,7 +356,26 @@ function createServer(rootDir, authDir) {
       if (filePath.indexOf(rootDir) !== 0 || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Not found'); return;
       }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+      // 静态文件也要支持 Range：音视频拖进度时浏览器发 bytes= 请求，
+      // 只回 200 整文件会让播放器 seek 失败、回到 0 秒重新播（实测）。
+      const stat = fs.statSync(filePath);
+      const mimeType = MIME[path.extname(filePath)] || 'application/octet-stream';
+      const range = req.headers.range;
+      if (range) {
+        const m = /^bytes=(\d*)-(\d*)$/.exec(String(range));
+        if (m) {
+          const total = stat.size;
+          let start = m[1] ? parseInt(m[1], 10) : total - (m[2] ? parseInt(m[2], 10) : 0);
+          let end = m[2] ? parseInt(m[2], 10) : total - 1;
+          if (isNaN(start) || isNaN(end) || start >= total || end >= total || start > end) {
+            res.writeHead(416, { 'Content-Range': 'bytes */' + total }); res.end(); return;
+          }
+          res.writeHead(206, { 'Content-Type': mimeType, 'Content-Range': 'bytes ' + start + '-' + end + '/' + total, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 });
+          fs.createReadStream(filePath, { start: start, end: end }).pipe(res);
+          return;
+        }
+      }
+      res.writeHead(200, { 'Content-Type': mimeType, 'Accept-Ranges': 'bytes', 'Content-Length': stat.size });
       fs.createReadStream(filePath).pipe(res);
     } catch (e) {
       log('server error', String(e && e.message || e));
