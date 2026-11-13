@@ -56,7 +56,8 @@ function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;')}
 function normTitle(t){return t.split('—')[0].split(' ').join('').toLowerCase()}
 /* 歌词与音乐源分离：QQ → 酷狗 → 网易云 独立回退链 */
 var LYRIC_CHAIN=['qq','kugou','netease'];
-function getLyrics(t){for(var i=0;i<LYRIC_CHAIN.length;i++){var k=LYRIC_CHAIN[i];if(t.lyr&&t.lyr[k])return{lines:t.lyr[k],from:platById(k).name}}return{lines:[[t.title,t.artist]],from:'无歌词源'}}
+var customLyricsMap={};try{customLyricsMap=JSON.parse(localStorage.getItem('omni-custom-lyrics')||'{}')}catch(e){}
+function getLyrics(t){if(customLyricsMap[t.title])return{lines:customLyricsMap[t.title],from:'自定义'};for(var i=0;i<LYRIC_CHAIN.length;i++){var k=LYRIC_CHAIN[i];if(t.lyr&&t.lyr[k])return{lines:t.lyr[k],from:platById(k).name}}return{lines:[[t.title,t.artist]],from:'无歌词源'}}
 function playable(t){return !t.locked||loginState[t.plat]==='in'}
 
 /* ================= PLATFORMS UI ================= */
@@ -129,6 +130,8 @@ function renderTracks(){
 }
 function renderShelf(){
  var sh=$('shelf');if(!sh)return;sh.innerHTML='';
+ if(typeof V!=='undefined'&&V.shelfPodcast){sh.innerHTML='<div class="shelf-card" style="flex-basis:220px"><div class="sc-cover" style="background:linear-gradient(140deg,#555,rgba(0,0,0,.55))">播</div><b>还没有播客歌单</b><span>播客内容接入后会出现在这里</span></div>';return}
+ if(typeof V!=='undefined'&&V.shelfMerge){var favCount=Object.keys(favs||{}).length;var mc=document.createElement('button');mc.className='shelf-card';mc.innerHTML='<div class="sc-cover" style="background:linear-gradient(140deg,#F4D28A,rgba(0,0,0,.55))">♥</div><b>我的收藏</b><span>'+favCount+' 首 · 合并显示</span>';mc.onclick=function(){libScope='fav';renderTracks();$('trackList').scrollIntoView({behavior:'smooth'})};sh.appendChild(mc)}
  tracks.forEach(function(t,idx){
   var c=document.createElement('button');c.className='shelf-card'+(idx===current?' playing':'');
   var ang=-16+(idx%6)*6;c.style.transform='rotateY('+ang+'deg)';
@@ -143,6 +146,7 @@ function renderLyrics(t){
  $('lyricSrcLabel').textContent='歌词源 · '+g.from;
  $('stageLyric').textContent=g.lines[Math.max(0,curLyricIdx)][0];
  $('stageLyricSub').textContent=g.lines[Math.max(0,curLyricIdx)][1]||'';
+ if(window.desktopAPI&&window.desktopAPI.sendLyric){try{if(typeof deskLyricOpen!=='undefined'&&deskLyricOpen)window.desktopAPI.sendLyric($('stageLyric').textContent+($('stageLyricSub').textContent?' — '+$('stageLyricSub').textContent:''))}catch(e){}}
 }
 
 /* ================= PLAYBACK ================= */
@@ -175,12 +179,15 @@ function attemptAutoSource(t){
   renderPlatforms();updateWizStatus();openModal(p,t);
  },700);
 }
+function isMVMode(){var s=$('mvSection');return s&&!s.classList.contains('hidden')}
 function syncPlayUI(){
- var playing=!audio.paused;
+ var playing=isMVMode()?!video.paused:!audio.paused;
  $('playBtn').textContent=playing?'⏸':'▶';
  $('disc').classList.toggle('spin',playing);$('nowCov').classList.toggle('spin',playing);
 }
-$('playBtn').onclick=function(){if(current<0||!audio.src){playTrack(0);return}if(audio.paused)audio.play();else audio.pause();syncPlayUI();renderTracks()};
+$('playBtn').onclick=function(){
+ if(isMVMode()){video.muted=false;if(video.paused)video.play();else video.pause();syncPlayUI();return}
+ if(current<0||!audio.src){playTrack(0);return}if(audio.paused)audio.play();else audio.pause();syncPlayUI();renderTracks()};
 $('heroPlay').onclick=function(){switchMode('music');playTrack(current>=0?current:0)};
 function nextIdx(){if(shuffleOn)return Math.floor(Math.random()*tracks.length);return (current+1)%tracks.length}
 $('nextBtn').onclick=function(){playTrack(nextIdx())};
@@ -190,8 +197,11 @@ $('repeatBtn').onclick=function(){repeatMode=(repeatMode+1)%3;audio.loop=(repeat
 audio.loop=false;
 $('speedSel').onchange=function(){audio.playbackRate=parseFloat(this.value);toast('音乐倍速 '+this.value+'×')};
 $('vol').addEventListener('input',function(e){audio.volume=e.target.value/100;video.volume=e.target.value/100});
-$('seek').addEventListener('input',function(e){if(audio.duration)audio.currentTime=e.target.value/100*audio.duration});
+$('seek').addEventListener('input',function(e){
+ if(isMVMode()){if(video.duration)video.currentTime=e.target.value/100*video.duration;return}
+ if(audio.duration)audio.currentTime=e.target.value/100*audio.duration});
 audio.addEventListener('timeupdate',function(){
+ if(isMVMode())return;
  if(audio.duration){$('seek').value=audio.currentTime/audio.duration*100;$('curTime').textContent=fmt(audio.currentTime);$('durTime').textContent=fmt(audio.duration)}
  if(current>=0){var t=tracks[current];var g=getLyrics(t);var idx=Math.floor(audio.currentTime/7)%g.lines.length;if(idx!==curLyricIdx){curLyricIdx=idx;renderLyrics(t)}}
 });
@@ -287,12 +297,35 @@ function renderMVs(){
 }
 function loadMV(mv){
  if(localVideoURL){URL.revokeObjectURL(localVideoURL);localVideoURL=null}
- video.src=mv.src;$('mvTitle').textContent=mv.title+' — '+mv.artist;
+ video.muted=false;video.src=mv.src;$('mvTitle').textContent=mv.title+' — '+mv.artist;
  $('metaFmt').textContent=extOf(mv.src);$('metaSrc').textContent='演示 MV · '+mv.platName;$('metaRes').textContent='读取中…';
  $('localMeta').textContent='';
- video.play().then(function(){toast('正在原画播放：'+mv.title)}).catch(function(){toast('点 ▶ 播放按钮开始播放')});
+ video.play().then(function(){toast('正在原画播放：'+mv.title);checkVideoAudio()}).catch(function(){toast('点 ▶ 播放按钮开始播放')});
  audio.pause();syncPlayUI();
 }
+/* 视频无声自检：播了 3 秒还没解出任何音频字节，就明说原因（片源无声 / 音频编码不受支持），不让用户对着无声画面干等 */
+var videoAudioTimer=null,videoAudioCheckedSrc='';
+function checkVideoAudio(){
+ if(videoAudioTimer)clearTimeout(videoAudioTimer);
+ var src=video.currentSrc||'';
+ videoAudioTimer=setTimeout(function(){
+  if(!src||video.currentSrc!==src||video.paused||video.ended)return;
+  try{
+   var n=video.webkitAudioDecodedByteCount;
+   if(typeof n==='number'&&n===0){
+    videoAudioCheckedSrc=src;
+    toast('这个视频没有可解码的音轨：片源本身无声，或音频编码（如 AC3 / DTS）不受浏览器支持 — 画面正常，声音出不来');
+    if(src.indexOf('blob:')===0)$('localMeta').textContent='⚠ 这个本地视频没有可解码的音轨（无声片源，或音频编码 AC3 / DTS 等不受支持）。画面正常播放；想有声请转成 H.264 + AAC 的 MP4，或用桌面版打开。';
+   }
+  }catch(e){}
+ },3000);
+}
+video.addEventListener('timeupdate',function(){
+ if(!isMVMode())return;
+ if(video.duration){$('seek').value=video.currentTime/video.duration*100;$('curTime').textContent=fmt(video.currentTime);$('durTime').textContent=fmt(video.duration)}
+});
+video.addEventListener('play',function(){syncPlayUI();if(video.currentSrc!==videoAudioCheckedSrc)checkVideoAudio()});
+video.addEventListener('pause',function(){syncPlayUI()});
 video.addEventListener('loadedmetadata',function(){
  if(video.videoWidth)$('metaRes').textContent=video.videoWidth+' × '+video.videoHeight+' · 原始';
  $('qualitySel').textContent='画质 · 原始 '+video.videoWidth+'×'+video.videoHeight+'（源文件 · 不转码）';
@@ -329,11 +362,11 @@ function handleFile(f){
  }
  if(localVideoURL)URL.revokeObjectURL(localVideoURL);
  localVideoURL=URL.createObjectURL(f);
- switchMode('mv');video.src=localVideoURL;
+ switchMode('mv');video.muted=false;video.src=localVideoURL;
  $('mvTitle').textContent=f.name+' — 本地视频';
  $('metaFmt').textContent=ext;$('metaSrc').textContent='本地文件';$('metaRes').textContent='读取中…';
  $('localMeta').textContent='已导入：'+f.name+' · '+ext+' · '+fileSizeMB(f)+' · 正在读取原始分辨率…（文件只在本机浏览器里播放，不上传）';
- video.play().then(function(){toast('本地视频原画播放中：'+f.name)}).catch(function(){toast('点 ▶ 播放本地视频')});
+ video.play().then(function(){toast('本地视频原画播放中：'+f.name);checkVideoAudio()}).catch(function(){toast('点 ▶ 播放本地视频')});
 }
 $('pickFileBtn').onclick=function(){$('localFile').click()};
 $('localFile').addEventListener('change',function(){handleFile(this.files[0]);this.value=''});
@@ -343,19 +376,23 @@ var dz=$('dropZone');
 dz.addEventListener('drop',function(e){var f=e.dataTransfer.files&&e.dataTransfer.files[0];handleFile(f)});
 
 /* ================= 视觉舞台：粒子 / 频谱 / 控制台 ================= */
-var PALETTES={galaxy:['#00F5D4','#F4D28A','#7FD8FF'],aurora:['#3dffb2','#38b6ff','#a8ff6e'],flow:['#F4D28A','#ff9a62','#00F5D4'],dusk:['#ff8fa3','#F4D28A','#7FD8FF']};
-var palette=PALETTES.galaxy,particleLevel=60;
+var PALETTES={galaxy:['#00F5D4','#F4D28A','#7FD8FF'],aurora:['#3dffb2','#38b6ff','#a8ff6e'],flow:['#F4D28A','#ff9a62','#00F5D4'],dusk:['#ff8fa3','#F4D28A','#7FD8FF'],vinyl:['#f4f1e8','#00F5D4','#F4D28A'],sonic:['#7FD8FF','#00F5D4','#a8ff6e'],planet:['#F4D28A','#ff8fa3','#7FD8FF'],tunnel:['#38b6ff','#a8ff6e','#00F5D4'],void:['#9c9ca8','#6d6d7a','#f4f1e8']};
+var palette=PALETTES.galaxy,particleLevel=60,particleSizeMul=1,terrainOn=true,vizBarCount=44,spectrumSens=1;
 (function(){
  var c=$('bgCanvas'),ctx=c.getContext('2d'),W,H,dots=[],t=0,reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- function size(){W=c.width=Math.floor(innerWidth*Math.min(devicePixelRatio||1,1.5));H=c.height=Math.floor(innerHeight*Math.min(devicePixelRatio||1,1.5));dots=[];var n=Math.floor(particleLevel*1.1);for(var i=0;i<n;i++)dots.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.8+.4,s:Math.random()*.25+.05,o:Math.random()*.5+.15})}
+ function size(){W=c.width=Math.floor(innerWidth*Math.min(devicePixelRatio||1,1.5));H=c.height=Math.floor(innerHeight*Math.min(devicePixelRatio||1,1.5));dots=[];var n=Math.floor(particleLevel*1.1);for(var i=0;i<n;i++)dots.push({x:Math.random()*W,y:Math.random()*H,r:(Math.random()*1.8+.4)*particleSizeMul,s:Math.random()*.25+.05,o:Math.random()*.5+.15})}
  size();addEventListener('resize',size);
  window.__setParticles=function(v){particleLevel=v;size()};
+ window.__setParticleSize=function(v){particleSizeMul=v;size()};
+ window.__setTerrain=function(v){terrainOn=v};
  function draw(){
   ctx.clearRect(0,0,W,H);t+=.0035;
+  if(terrainOn){
   for(var k=0;k<3;k++){
    ctx.beginPath();
    for(var x=0;x<=W;x+=14){var y=H*.62+Math.sin(x/W*2.6+t*(1+k*.4)+k*1.7)*H*.10+Math.sin(x/W*6-t*1.4+k)*H*.02-k*H*.07;x===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
    ctx.strokeStyle=palette[k%3];ctx.globalAlpha=.16;ctx.lineWidth=26-k*6;ctx.stroke();
+  }
   }
   ctx.globalAlpha=1;
   dots.forEach(function(d){d.y-=d.s;if(d.y<-4){d.y=H+4;d.x=Math.random()*W}ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,7);ctx.fillStyle=palette[0];ctx.globalAlpha=d.o;ctx.fill()});
@@ -377,10 +414,10 @@ function initViz(){
   var w=c.width,h=c.height;ctx.clearRect(0,0,w,h);
   var live=analyser&&!audio.paused;
   if(live)analyser.getByteFrequencyData(data);
-  var bars=44,bw=w/bars;
+  var bars=vizBarCount,bw=w/bars;
   for(var i=0;i<bars;i++){
    var v=live?data[Math.floor(i*1.3)]/255:(.12+.08*Math.sin(Date.now()/900+i*.7));
-   var bh=Math.max(2,v*h*beatMul);
+   var bh=Math.max(2,v*h*beatMul*spectrumSens);
    ctx.fillStyle=i%3===0?palette[0]:(i%3===1?palette[1]:palette[2]);ctx.globalAlpha=.85;
    ctx.fillRect(i*bw+2,h-bh,bw-4,bh);
   }
@@ -388,23 +425,185 @@ function initViz(){
  }
  frame();
 })();
+/* ================= 视觉设置 · 六栏控制台（Mineradio 式）+ 持久化 ================= */
+var VDEF={preset:'galaxy',accent:'#00F5D4',particles:60,glow:22,lyricSize:100,beat:100,bgColor:'#000000',bgOpacity:100,cropX:50,cropY:50,cropZoom:100,bgFit:'cover',glassBlur:20,lyricMode:'orig',lyricRows:0,lyricLines:3,transGap:92,transSize:65,transAlpha:86,lyricColor:'#ffffff',lyricAnim:true,depth:20,coverSharp:119,camZoom:50,camOn:true,particleSize:100,terrain:true,spectrum:100,vizBars:44,shelfMode:'stage',shelfCam:'dynamic',shelfHide:'auto',shelfPodcast:false,shelfMerge:false,shelfSize:100,shelfAnim:35,shelfEnter:'fade',autoplay:false,resume:'pos',quality:'mid'};
+var V={};try{var _sv=JSON.parse(localStorage.getItem('omni-visuals-v1')||'{}');for(var _k in VDEF)V[_k]=(_k in _sv)?_sv[_k]:VDEF[_k]}catch(e){for(var _k2 in VDEF)V[_k2]=VDEF[_k2]}
+var visualHist=[];
+function saveV(){try{localStorage.setItem('omni-visuals-v1',JSON.stringify(V))}catch(e){}}
+function pushHist(){visualHist.push(JSON.stringify(V));if(visualHist.length>20)visualHist.shift()}
+function lyricBase(){return Math.min(Math.max(innerWidth*.046,30),54)}
+function applyLyricSize(v){$('stageLyric').style.fontSize=(lyricBase()*v/100)+'px';var o=$('oL');if(o)o.textContent=v+'%'}
+function applyV(){
+ var p=PALETTES[V.preset]||PALETTES.galaxy;palette=p;
+ document.documentElement.style.setProperty('--accent',V.accent);
+ document.documentElement.style.setProperty('--glow',V.glow+'px');
+ document.documentElement.style.setProperty('--bg',V.bgColor);
+ document.documentElement.style.setProperty('--shelf-anim',(V.shelfAnim/100)+'s');
+ document.body.classList.toggle('fx-void',V.preset==='void');
+ document.body.classList.toggle('fx-tunnel',V.preset==='tunnel');
+ document.body.classList.toggle('fx-vinyl',V.preset==='vinyl');
+ document.body.classList.toggle('fx-planet',V.preset==='planet');
+ document.body.classList.toggle('shelf-hidden',V.shelfMode==='off');
+ document.body.classList.toggle('shelf-side',V.shelfMode==='side');
+ document.body.classList.toggle('shelf-static',V.shelfCam==='static');
+ if(window.__setParticles)window.__setParticles(V.preset==='void'?0:Math.min(V.particles,V.quality==='low'?30:V.quality==='high'?100:60));
+ if(window.__setParticleSize)window.__setParticleSize(V.particleSize/100);
+ if(window.__setTerrain)window.__setTerrain(V.terrain);
+ spectrumSens=V.spectrum/100;vizBarCount=V.vizBars;beatMul=V.beat/100;
+ applyLyricSize(V.lyricSize);
+ var sl=$('stageLyric');sl.style.color=V.lyricColor;sl.style.textShadow='0 0 '+V.glow+'px '+V.accent+',0 0 '+(V.glow*2.2)+'px '+V.accent+'55';
+ var sub=$('stageLyricSub');sub.style.letterSpacing=(V.transGap/100*0.14)+'em';sub.style.fontSize=(lyricBase()*V.transSize/100*0.32)+'px';sub.style.opacity=V.transAlpha/100;
+ $('lyricsBox').style.scrollBehavior=V.lyricAnim?'smooth':'auto';
+ $('lyricsBox').classList.toggle('immersive',V.lyricRows===0);
+ $('lyricsBox').style.maxHeight=V.lyricRows===0?'none':(V.lyricLines*30+40)+'px';
+ $('lyricsBox').style.overflow='hidden';
+ var vg=document.querySelector('.vignette');if(vg)vg.style.opacity=0.35+V.depth/100;
+ var disc=$('disc');disc.style.filter='blur('+Math.max(0,(200-V.coverSharp)/50)+'px)';
+ var sc=document.querySelector('.stage-center');if(sc)sc.style.transform=V.camOn?('scale('+(1+V.camZoom/100*0.04)+')'):'none';
+ document.querySelectorAll('.glass').forEach(function(el){el.style.backdropFilter='blur('+V.glassBlur+'px)';el.style.webkitBackdropFilter='blur('+V.glassBlur+'px)'});
+ var bm=$('bgMedia');if(bm){bm.style.opacity=V.bgOpacity/100;var m=bm.firstChild;if(m){m.style.objectPosition=V.cropX+'% '+V.cropY+'%';m.style.transform='scale('+(V.cropZoom/100)+')';m.style.objectFit=V.bgFit}}
+ var sh=$('shelf');if(sh)sh.style.zoom=V.shelfSize/100;
+ saveV();
+}
+/* 控制台页签 */
+document.querySelectorAll('#consoleTabs .ctab').forEach(function(b){b.onclick=function(){
+ document.querySelectorAll('#consoleTabs .ctab').forEach(function(x){x.classList.remove('active')});b.classList.add('active');
+ var t=b.getAttribute('data-tab');
+ document.querySelectorAll('.cpanel').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-panel')===t)});
+}});
+/* 控制台搜索：按文字过滤各小节 */
+$('consoleSearch').addEventListener('input',function(){
+ var q=this.value.trim().toLowerCase();
+ document.querySelectorAll('.csec').forEach(function(s){s.style.display=(!q||s.textContent.toLowerCase().indexOf(q)>=0)?'':'none'});
+});
+$('consoleUndo').onclick=function(){if(!visualHist.length){toast('没有可撤销的调整');return}var prev=visualHist.pop();try{V=JSON.parse(prev)}catch(e){}syncConsoleUI();applyV();toast('已撤销上一次调整')};
+$('consoleHist').onclick=function(){toast('已记录 '+visualHist.length+' 次视觉调整（本页会话内），点 ↩ 可逐步回退')};
+$('consoleHotkeys').onclick=function(){toast('热键：空格 播放/暂停 · ←/→ 快退/快进 10 秒 · ↑/↓ 音量 · M 静音 · F 全屏')};
+/* 预设：配色 + 模式一并换 */
+var PRESET_MODES={vinyl:'唱片',planet:'星球',tunnel:'滚筒',void:'虚空',sonic:'音域回响'};
 document.querySelectorAll('#presets .preset').forEach(function(b){b.onclick=function(){
+ pushHist();
  document.querySelectorAll('#presets .preset').forEach(function(x){x.classList.remove('active')});b.classList.add('active');
- palette=PALETTES[b.getAttribute('data-preset')]||PALETTES.galaxy;
- document.documentElement.style.setProperty('--accent',palette[0]);toast('视觉预设：'+b.textContent.trim());
+ V.preset=b.getAttribute('data-preset');V.accent=(PALETTES[V.preset]||PALETTES.galaxy)[0];
+ applyV();syncConsoleUI();toast('视觉预设：'+b.textContent.trim());
 }});
 document.querySelectorAll('.swatch').forEach(function(b){b.onclick=function(){
+ pushHist();
  document.querySelectorAll('.swatch').forEach(function(x){x.classList.remove('active')});b.classList.add('active');
- var col=b.getAttribute('data-color');document.documentElement.style.setProperty('--accent',col);
- palette=[col,'#F4D28A','#7FD8FF'];toast('界面高亮已换色');
+ V.accent=b.getAttribute('data-color');palette=[V.accent,'#F4D28A','#7FD8FF'];applyV();toast('界面高亮已换色');
 }});
-function lyricBase(){return Math.min(Math.max(innerWidth*.046,30),54)}
-function applyLyricSize(v){$('stageLyric').style.fontSize=(lyricBase()*v/100)+'px';$('oL').textContent=v+'%'}
-$('fxParticles').addEventListener('input',function(){$('oP').textContent=this.value;if(window.__setParticles)window.__setParticles(+this.value)});
-$('fxGlow').addEventListener('input',function(){$('oG').textContent=this.value;document.documentElement.style.setProperty('--glow',this.value+'px')});
-$('fxLyric').addEventListener('input',function(){applyLyricSize(+this.value)});
-$('fxBeat').addEventListener('input',function(){$('oB').textContent=this.value+'%';beatMul=this.value/100});
-addEventListener('resize',function(){applyLyricSize(+$('fxLyric').value)});
+/* 滑杆绑定小助手 */
+function bindRange(id,outId,fmt,fn){var el=$(id);if(!el)return;el.addEventListener('input',function(){pushHist();var v=+this.value;var o=$(outId);if(o)o.textContent=fmt(v);fn(v);applyV()})}
+bindRange('fxParticles','oP',function(v){return v},function(v){V.particles=v});
+bindRange('fxGlow','oG',function(v){return v},function(v){V.glow=v});
+bindRange('fxLyric','oL',function(v){return v+'%'},function(v){V.lyricSize=v});
+bindRange('fxBeat','oB',function(v){return v+'%'},function(v){V.beat=v});
+bindRange('bgOpacity','oBgOp',function(v){return (v/100).toFixed(2)},function(v){V.bgOpacity=v});
+bindRange('cropX','oCropX',function(v){return v},function(v){V.cropX=v});
+bindRange('cropY','oCropY',function(v){return v},function(v){V.cropY=v});
+bindRange('cropZoom','oCropZoom',function(v){return (v/100).toFixed(2)},function(v){V.cropZoom=v});
+bindRange('glassBlur','oGlass',function(v){return v},function(v){V.glassBlur=v});
+bindRange('lyricLines','oLyricLines',function(v){return v},function(v){V.lyricLines=v});
+bindRange('transGap','oTransGap',function(v){return (v/100).toFixed(2)},function(v){V.transGap=v});
+bindRange('transSize','oTransSize',function(v){return (v/100).toFixed(2)},function(v){V.transSize=v});
+bindRange('transAlpha','oTransAlpha',function(v){return (v/100).toFixed(2)},function(v){V.transAlpha=v});
+bindRange('depthFx','oDepth',function(v){return (v/100).toFixed(2)},function(v){V.depth=v});
+bindRange('coverSharp','oCoverSharp',function(v){return v+'×'+v},function(v){V.coverSharp=v});
+bindRange('camZoom','oCamZoom',function(v){return (v/100).toFixed(2)},function(v){V.camZoom=v});
+bindRange('particleSize','oParticleSize',function(v){return (v/100).toFixed(1)},function(v){V.particleSize=v});
+bindRange('spectrumSens','oSpectrum',function(v){return (v/100).toFixed(2)},function(v){V.spectrum=v});
+bindRange('vizBars','oVizBars',function(v){return v},function(v){V.vizBars=v});
+bindRange('shelfSize','oShelfSize',function(v){return v+'%'},function(v){V.shelfSize=v});
+bindRange('shelfAnim','oShelfAnim',function(v){return (v/100).toFixed(2)+'s'},function(v){V.shelfAnim=v});
+/* 颜色与开关 */
+$('bgColor').addEventListener('input',function(){pushHist();V.bgColor=this.value;applyV()});
+$('lyricColor').addEventListener('input',function(){pushHist();V.lyricColor=this.value;applyV()});
+$('bgCoverBtn').onclick=function(){var d=$('disc');var m=(getComputedStyle(d).backgroundImage||'').match(/#[0-9a-fA-F]{6}/);pushHist();V.bgColor=m?m[0]:V.accent;var bc=$('bgColor');if(bc)bc.value=V.bgColor;applyV();toast('背景颜色已取当前封面主色')};
+$('bgFitBtn').onclick=function(){pushHist();V.bgFit=V.bgFit==='cover'?'contain':'cover';applyV();toast('背景裁切：'+(V.bgFit==='cover'?'铺满':'完整显示'))};
+$('bgClearBtn').onclick=function(){pushHist();var bm=$('bgMedia');bm.innerHTML='';applyV();toast('背景媒体已清除')};
+$('bgPickBtn').onclick=function(){$('bgMediaFile').click()};
+$('bgMediaFile').addEventListener('change',function(){var f=this.files[0];this.value='';if(!f)return;var bm=$('bgMedia');bm.innerHTML='';var url=URL.createObjectURL(f);var el;if(f.type.indexOf('video')===0){el=document.createElement('video');el.src=url;el.autoplay=true;el.muted=true;el.loop=true;el.playsInline=true}else{el=document.createElement('img');el.src=url}bm.appendChild(el);pushHist();applyV();toast('背景媒体已设置：'+f.name)});
+$('weBtn').onclick=function(){toast('Wallpaper Engine 是独立的 Windows 壁纸软件，本播放器没有接入它的联动接口；原背景保留，可用上方「选择」直接设图片 / 视频背景')};
+function toggleBtn(el,on){el.classList.toggle('on',on);el.textContent=on?'开':'关'}
+$('camToggle').onclick=function(){pushHist();V.camOn=!V.camOn;toggleBtn(this,V.camOn);applyV()};
+$('terrainToggle').onclick=function(){pushHist();V.terrain=!V.terrain;toggleBtn(this,V.terrain);applyV()};
+$('lyricAnimToggle').onclick=function(){pushHist();V.lyricAnim=!V.lyricAnim;toggleBtn(this,V.lyricAnim);applyV()};
+$('shelfPodcastToggle').onclick=function(){pushHist();V.shelfPodcast=!V.shelfPodcast;toggleBtn(this,V.shelfPodcast);renderShelf();applyV();toast(V.shelfPodcast?'播客歌单：已显示（目前没有播客内容）':'播客歌单：已隐藏')};
+$('shelfMergeToggle').onclick=function(){pushHist();V.shelfMerge=!V.shelfMerge;toggleBtn(this,V.shelfMerge);renderShelf();applyV()};
+$('autoplayToggle').onclick=function(){pushHist();V.autoplay=!V.autoplay;toggleBtn(this,V.autoplay);applyV();toast(V.autoplay?'启动自动播放：开（下次打开自动播第一首）':'启动自动播放：关')};
+$('camInteractBtn').onclick=function(){toast('摄像头手势需要调用摄像头，本版没有开启这项能力；视觉控制台的其它开关都真实可用')};
+/* 分段按钮组 */
+function segGroup(id,attr,fn){var seg=$(id);if(!seg)return;seg.querySelectorAll('.seg-btn').forEach(function(b){b.onclick=function(){pushHist();seg.querySelectorAll('.seg-btn').forEach(function(x){x.classList.remove('active')});b.classList.add('active');fn(b.getAttribute(attr));applyV()}})}
+segGroup('lyricModeSeg','data-lmode',function(v){V.lyricMode=v;$('customLyricWrap').classList.toggle('hidden',v!=='custom');renderLyrics(tracks[current>=0?current:0])});
+segGroup('lyricRowsSeg','data-rows',function(v){V.lyricRows=+v});
+segGroup('shelfModeSeg','data-smode',function(v){V.shelfMode=v;renderShelf()});
+segGroup('shelfCamSeg','data-scam',function(v){V.shelfCam=v});
+segGroup('shelfHideSeg','data-shide',function(v){V.shelfHide=v;applyShelfAutoHide()});
+segGroup('shelfEnterSeg','data-enter',function(v){V.shelfEnter=v;applyShelfEnter()});
+segGroup('exitModeSeg','data-exit',function(v){if(v==='tray'){if(window.desktopAPI&&window.desktopAPI.setTrayMode){window.desktopAPI.setTrayMode(true);toast('后台托盘：开 — 关闭窗口后留在托盘，点托盘图标恢复')}else toast('后台托盘需要桌面版；在网页版里关闭窗口就是退出')}else{if(window.desktopAPI&&window.desktopAPI.setTrayMode)window.desktopAPI.setTrayMode(false);toast('关闭窗口：直接退出')}});
+segGroup('resumeSeg','data-resume',function(v){V.resume=v;toast(v==='pos'?'恢复播放：按上次进度':'恢复播放：重播整首')});
+segGroup('qualitySeg','data-q',function(v){V.quality=v;toast('画质档位：'+({low:'流畅',mid:'均衡',high:'画质'})[v]+'（粒子数量随档位调整）')});
+/* 歌单架自动隐藏 + 唤出动画 */
+var shelfIdleTimer=null;
+function applyShelfAutoHide(){var sec=document.querySelector('.shelf-sec');if(!sec)return;if(V.shelfHide==='auto'){clearTimeout(shelfIdleTimer);shelfIdleTimer=setTimeout(function(){sec.style.opacity=.3},8000);sec.onmouseenter=function(){sec.style.opacity=1;clearTimeout(shelfIdleTimer)};sec.onmouseleave=function(){clearTimeout(shelfIdleTimer);shelfIdleTimer=setTimeout(function(){sec.style.opacity=.3},8000)}}else{sec.style.opacity=1;sec.onmouseenter=null;sec.onmouseleave=null}}
+function applyShelfEnter(){var sec=document.querySelector('.shelf-sec');if(!sec)return;sec.style.transition='opacity .3s, transform .3s';if(V.shelfEnter==='up'){sec.style.transform='translateY(14px)';requestAnimationFrame(function(){sec.style.transform='none'})}else if(V.shelfEnter==='zoom'){sec.style.transform='scale(.96)';requestAnimationFrame(function(){sec.style.transform='none'})}else{sec.style.opacity=0;requestAnimationFrame(function(){sec.style.opacity=1})}}
+/* 用户存档：保存 / 应用 / 删除整套视觉参数 */
+function readSaves(){try{return JSON.parse(localStorage.getItem('omni-visual-saves')||'[]')}catch(e){return[]}}
+function renderSaves(){var box=$('visualSaves');if(!box)return;var arr=readSaves();box.innerHTML='';if(!arr.length){box.innerHTML='<p class="cnote">还没有存档。调好视觉后点「保存当前视觉」。</p>';return}arr.forEach(function(s,i){var r=document.createElement('div');r.className='save-row';r.innerHTML='<b>'+esc(s.name)+'</b>';var ap=document.createElement('button');ap.className='cbtn';ap.textContent='应用';ap.onclick=function(){pushHist();for(var k in VDEF)V[k]=(k in s.v)?s.v[k]:VDEF[k];syncConsoleUI();applyV();renderShelf();toast('已应用存档：'+s.name)};var dl=document.createElement('button');dl.className='cbtn';dl.textContent='删除';dl.onclick=function(){var a2=readSaves();a2.splice(i,1);localStorage.setItem('omni-visual-saves',JSON.stringify(a2));renderSaves()};r.appendChild(ap);r.appendChild(dl);box.appendChild(r)})}
+$('saveVisual').onclick=function(){var arr=readSaves();var name='视觉 '+(arr.length+1)+' · '+(PRESET_MODES[V.preset]||V.preset);arr.push({name:name,v:JSON.parse(JSON.stringify(V))});try{localStorage.setItem('omni-visual-saves',JSON.stringify(arr))}catch(e){}renderSaves();toast('已保存：'+name)};
+$('exportVisual').onclick=function(){var txt=JSON.stringify(V);if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast('视觉参数已复制，可发给别人粘贴导入')},function(){toast('复制失败，参数：'+txt.slice(0,80)+'…')});else toast('当前浏览器不支持一键复制')};
+$('resetVisual').onclick=function(){if(!confirm('恢复全部视觉参数为默认？'))return;pushHist();for(var k in VDEF)V[k]=VDEF[k];syncConsoleUI();applyV();renderShelf();toast('视觉已恢复默认')};
+$('resetAllBtn').onclick=function(){if(!confirm('恢复全部设置（视觉 + 系统）为默认？收藏和自定义歌词不受影响。'))return;pushHist();for(var k2 in VDEF)V[k2]=VDEF[k2];syncConsoleUI();applyV();renderShelf();toast('全部设置已恢复默认')};
+/* 自定义歌词：只对当前歌曲生效 */
+function readCustomLyrics(){try{return JSON.parse(localStorage.getItem('omni-custom-lyrics')||'{}')}catch(e){return{}}}
+$('saveCustomLyric').onclick=function(){var t=tracks[current>=0?current:0];if(!t){toast('先选一首歌');return}var txt=$('customLyrics').value.trim();if(!txt){toast('先在框里写歌词，一行一句');return}var m=readCustomLyrics();m[t.title]=txt.split('\n').map(function(s){return [s.trim(),'']}).filter(function(a){return a[0]});customLyricsMap[t.title]=m[t.title];try{localStorage.setItem('omni-custom-lyrics',JSON.stringify(m))}catch(e){}renderLyrics(t);toast('已保存「'+t.title+'」的自定义歌词')};
+$('clearCustomBtn').onclick=function(){if(!confirm('清空全部自定义歌词？'))return;customLyricsMap={};try{localStorage.removeItem('omni-custom-lyrics')}catch(e){}toast('自定义歌词已清空')};
+$('clearFavsBtn').onclick=function(){if(!confirm('清空全部收藏？'))return;favs={};renderTracks();toast('收藏已清空')};
+$('clearCacheBtn').onclick=function(){var n=0;try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('omni-')===0&&k!=='omni-visuals-v1')n++}}catch(e){}try{['omni-visual-saves','omni-custom-lyrics','omni-resume'].forEach(function(k){localStorage.removeItem(k)})}catch(e){}renderSaves();updateStorageInfo();toast('缓存已清除（视觉设置保留）')};
+function updateStorageInfo(){var bytes=0;try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);bytes+=(k||'').length+((localStorage.getItem(k)||'').length)}}catch(e){}$('storageInfo').textContent='本机缓存占用约 '+(bytes/1024).toFixed(1)+' KB（视觉设置、存档、自定义歌词、收藏、恢复进度都在其中，不含音频文件本身）'}
+/* 播放输出设备 */
+function refreshOutDevices(){var sel=$('outDeviceSel');if(!sel||!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices)return;navigator.mediaDevices.enumerateDevices().then(function(devs){var cur=sel.value;sel.innerHTML='<option value="">默认输出设备</option>';devs.forEach(function(d){if(d.kind==='audiooutput'){var o=document.createElement('option');o.value=d.deviceId;o.textContent=d.label||('输出设备 '+(sel.options.length));sel.appendChild(o)}});if(cur)sel.value=cur}).catch(function(){})}
+$('outDeviceSel').addEventListener('change',function(){var id=this.value;var p=[];if(id){if(audio.setSinkId)p.push(audio.setSinkId(id).catch(function(){}));if(video.setSinkId)p.push(video.setSinkId(id).catch(function(){}))}Promise.all(p).then(function(){toast(id?'音频输出已切换':'已切回默认输出设备')})});
+$('outDeviceSel').addEventListener('focus',refreshOutDevices);
+/* 桌面歌词小窗（桌面版） */
+var deskLyricOpen=false;
+$('desktopLyricsBtn').onclick=function(){
+ if(window.desktopAPI&&window.desktopAPI.lyricsWindow){deskLyricOpen=!deskLyricOpen;window.desktopAPI.lyricsWindow(deskLyricOpen);this.textContent=deskLyricOpen?'关闭':'打开';$('deskLyricState').textContent=deskLyricOpen?'桌面歌词：已打开':'桌面版小窗歌词';if(deskLyricOpen&&window.desktopAPI.sendLyric)window.desktopAPI.sendLyric($('stageLyric').textContent+' — '+$('stageLyricSub').textContent)}
+ else toast('桌面歌词需要桌面版（本页是网页版）；装桌面版后这里可以直接开关小窗歌词')
+};
+/* 时钟 + 每日一言 */
+var DAILY_QUOTES=['“保持热爱，奔赴下一场山海。”','“让今天的声音，从你喜欢的地方开始。”','“好歌值得反复听，就像好天气值得出门。”','“把耳机戴好，世界就安静了。”','“今晚的歌单，留给最放松的你。”','“一首歌的时间，刚好想起一个人。”','“旋律响起的地方，就是目的地。”'];
+function tickClock(){var d=new Date();var el=$('bigClock');if(el)el.textContent=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);var dt=$('bigDate');if(dt)dt.textContent=d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日星期'+'日一二三四五六'[d.getDay()];var q=$('dailyQuote');if(q){var day=Math.floor(d.getTime()/86400000);q.innerHTML=DAILY_QUOTES[day%DAILY_QUOTES.length]+'<br><span style="font-size:12px;color:var(--muted);font-family:\'Noto Sans SC\'">— 每日热评</span>'}}
+setInterval(tickClock,1000);tickClock();
+/* 快捷键：空格 / 方向键 / M / F（输入框里不触发） */
+addEventListener('keydown',function(e){var t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'))return;if(e.code==='Space'){e.preventDefault();$('playBtn').click()}else if(e.code==='ArrowRight'){if(isMVMode())video.currentTime=Math.min(video.duration||0,video.currentTime+10);else if(audio.duration)audio.currentTime=Math.min(audio.duration,audio.currentTime+10)}else if(e.code==='ArrowLeft'){if(isMVMode())video.currentTime=Math.max(0,video.currentTime-10);else audio.currentTime=Math.max(0,audio.currentTime-10)}else if(e.code==='ArrowUp'){e.preventDefault();var v=Math.min(100,(+ $('vol').value)+5);$('vol').value=v;audio.volume=v/100;video.volume=v/100}else if(e.code==='ArrowDown'){e.preventDefault();var v2=Math.max(0,(+ $('vol').value)-5);$('vol').value=v2;audio.volume=v2/100;video.volume=v2/100}else if(e.key==='m'||e.key==='M'){audio.muted=!audio.muted;video.muted=audio.muted;toast(audio.muted?'已静音':'已取消静音')}else if(e.key==='f'||e.key==='F'){if(document.fullscreenElement)document.exitFullscreen();else if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(function(){})}});
+/* 恢复进度：按上次进度 / 重播整首 */
+var resumeSavedAt=0;
+audio.addEventListener('timeupdate',function(){if(V.resume!=='pos'||isMVMode())return;var now=Date.now();if(now-resumeSavedAt<5000)return;resumeSavedAt=now;try{localStorage.setItem('omni-resume',JSON.stringify({idx:current,t:audio.currentTime}))}catch(e){}});
+function restoreResume(){if(V.resume!=='pos')return;try{var r=JSON.parse(localStorage.getItem('omni-resume')||'null');if(!r||r.idx==null||!tracks[r.idx])return;current=r.idx;audio.src=tracks[r.idx].src;audio.addEventListener('loadedmetadata',function(){if(r.t&&r.t<audio.duration-2)audio.currentTime=r.t},{once:true});updateStage(tracks[r.idx]);syncPlayUI();renderTracks()}catch(e){}}
+/* 同步控制台 UI 到 V（应用存档 / 撤销后用） */
+function syncConsoleUI(){
+ document.querySelectorAll('#presets .preset').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-preset')===V.preset)});
+ document.querySelectorAll('.swatch').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-color')===V.accent)});
+ var set=function(id,v){var el=$(id);if(el)el.value=v};
+ set('fxParticles',V.particles);set('fxGlow',V.glow);set('fxLyric',V.lyricSize);set('fxBeat',V.beat);
+ set('bgOpacity',V.bgOpacity);set('cropX',V.cropX);set('cropY',V.cropY);set('cropZoom',V.cropZoom);set('glassBlur',V.glassBlur);
+ set('lyricLines',V.lyricLines);set('transGap',V.transGap);set('transSize',V.transSize);set('transAlpha',V.transAlpha);
+ set('depthFx',V.depth);set('coverSharp',V.coverSharp);set('camZoom',V.camZoom);set('particleSize',V.particleSize);
+ set('spectrumSens',V.spectrum);set('vizBars',V.vizBars);set('shelfSize',V.shelfSize);set('shelfAnim',V.shelfAnim);
+ var o=function(id,v){var el=$(id);if(el)el.textContent=v};
+ o('oP',V.particles);o('oG',V.glow);o('oL',V.lyricSize+'%');o('oB',V.beat+'%');o('oBgOp',(V.bgOpacity/100).toFixed(2));
+ o('oCropX',V.cropX);o('oCropY',V.cropY);o('oCropZoom',(V.cropZoom/100).toFixed(2));o('oGlass',V.glassBlur);
+ o('oLyricLines',V.lyricLines);o('oTransGap',(V.transGap/100).toFixed(2));o('oTransSize',(V.transSize/100).toFixed(2));o('oTransAlpha',(V.transAlpha/100).toFixed(2));
+ o('oDepth',(V.depth/100).toFixed(2));o('oCoverSharp',V.coverSharp+'×'+V.coverSharp);o('oCamZoom',(V.camZoom/100).toFixed(2));
+ o('oParticleSize',(V.particleSize/100).toFixed(1));o('oSpectrum',(V.spectrum/100).toFixed(2));o('oVizBars',V.vizBars);
+ o('oShelfSize',V.shelfSize+'%');o('oShelfAnim',(V.shelfAnim/100).toFixed(2)+'s');
+ toggleBtn($('camToggle'),V.camOn);toggleBtn($('terrainToggle'),V.terrain);toggleBtn($('lyricAnimToggle'),V.lyricAnim);
+ toggleBtn($('shelfPodcastToggle'),V.shelfPodcast);toggleBtn($('shelfMergeToggle'),V.shelfMerge);toggleBtn($('autoplayToggle'),V.autoplay);
+ $('customLyricWrap').classList.toggle('hidden',V.lyricMode!=='custom');
+ var bc=$('bgColor');if(bc)bc.value=V.bgColor;var lc=$('lyricColor');if(lc)lc.value=V.lyricColor;
+}
+addEventListener('resize',function(){applyLyricSize(V.lyricSize)});
 
 /* ================= 全屏沉浸 / PWA 安装 / 设备检测 ================= */
 $('immersiveBtn').onclick=function(){
@@ -598,7 +797,9 @@ if (IS_DESKTOP) {
 }
 
 /* ================= INIT ================= */
-audio.volume=.8;video.volume=.8;audio.playbackRate=1;
+audio.volume=.8;video.volume=.8;video.muted=false;audio.playbackRate=1;
 buildWizard();renderPlatforms();renderTracks();renderMVs();updateWizStatus();
 curLyricIdx=0;renderLyrics(tracks[0]);
 video.addEventListener('loadedmetadata',function(){}, {once:true});
+syncConsoleUI();applyV();renderSaves();updateStorageInfo();refreshOutDevices();applyShelfAutoHide();restoreResume();
+if(V.autoplay){setTimeout(function(){if(current<0)playTrack(0)},800)}
