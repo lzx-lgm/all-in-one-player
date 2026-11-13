@@ -321,6 +321,7 @@ function renderMVs(){
 }
 function loadMV(mv){
  if(localVideoURL){URL.revokeObjectURL(localVideoURL);localVideoURL=null}
+ currentLocalFile=null;currentLocalFilePath='';$('openExtBtn').style.display='none';resetVideoPro();
  video.muted=false;video.src=proxiedMediaUrl(mv.src);$('mvTitle').textContent=mv.title+' — '+mv.artist;
  $('metaFmt').textContent=extOf(mv.src);$('metaSrc').textContent='演示 MV · '+mv.platName;$('metaRes').textContent='读取中…';
  $('localMeta').textContent='';
@@ -339,7 +340,7 @@ function checkVideoAudio(){
    if(typeof n==='number'&&n===0){
     videoAudioCheckedSrc=src;
     toast('这个视频没有可解码的音轨：片源本身无声，或音频编码（如 AC3 / DTS）不受浏览器支持 — 画面正常，声音出不来');
-    if(src.indexOf('blob:')===0)$('localMeta').textContent='⚠ 这个本地视频没有可解码的音轨（无声片源，或音频编码 AC3 / DTS 等不受支持）。画面正常播放；想有声请转成 H.264 + AAC 的 MP4，或用桌面版打开。';
+    if(src.indexOf('blob:')===0)$('localMeta').textContent='⚠ 这个本地视频没有可解码的音轨（无声片源，或音频编码 AC3 / DTS 等不受支持）。画面正常播放；想有声请转成 H.264 + AAC 的 MP4，或点下方「用系统播放器打开」（桌面版，装了 PotPlayer 就是它）。';
    }
   }catch(e){}
  },3000);
@@ -364,8 +365,136 @@ $('nativeBtn').onclick=function(){video.classList.add('native');this.classList.a
 $('fsBtn').onclick=function(){var el=video.closest('.theater-screen')||video;if(el.requestFullscreen)el.requestFullscreen().catch(function(){toast('当前浏览器不允许全屏')});else if(video.webkitEnterFullscreen)video.webkitEnterFullscreen();else toast('当前浏览器不支持全屏')};
 $('pipBtn').onclick=function(){if(document.pictureInPictureElement)document.exitPictureInPicture();else if(video.requestPictureInPicture)video.requestPictureInPicture().catch(function(){toast('当前浏览器不支持画中画，或视频还没开始播')});else toast('当前浏览器不支持画中画')};
 video.addEventListener('error',function(){
- if(video.currentSrc&&video.currentSrc.indexOf('blob:')===0){$('localMeta').textContent='⚠ 浏览器无法解码这个本地文件的编码（容器或编码不受支持）。文件本身没问题 — 请用下方桌面软件版（Electron 完整解码）打开，或换 MP4(H.264) / WebM 文件。';toast('本地文件编码不受当前浏览器支持，见下方说明')}
+ if(video.currentSrc&&video.currentSrc.indexOf('blob:')===0){$('localMeta').textContent='⚠ 浏览器无法解码这个本地文件的编码（容器或编码不受支持）。文件本身没问题 — 点下方「用系统播放器打开」（桌面版，装了 PotPlayer 就是它），或换 MP4(H.264) / WebM 文件。';toast('本地文件编码不受当前浏览器支持，见下方说明')}
 },true);
+
+/* ============ PotPlayer 式专业视频控制 ============ */
+/* 原理照 PotPlayer：自带解码兜底 + 字幕/音轨/A-B/逐帧/画面调节/截图/媒体信息。
+   浏览器 <video> 解不了 AC3/DTS 等音频时，声音出不来是编码问题不是 bug；
+   桌面版给「用系统播放器打开」兜底（PotPlayer 这类外置解码器能播）。 */
+var currentLocalFile=null,currentLocalFilePath='',abA=null,abB=null,subTrackEl=null,currentFps=30;
+function resetVideoPro(){
+ abA=null;abB=null;$('abState').textContent='';
+ if(subTrackEl){try{subTrackEl.remove()}catch(e){} subTrackEl=null;$('subState').textContent='未加载'}
+ $('mediaInfoPanel').classList.add('hidden');$('mediaInfoPanel').textContent='';
+ video.style.filter='';$('fltBright').value=100;$('fltContrast').value=100;$('fltSaturate').value=100;
+ var sel=$('audioTrackSel');sel.innerHTML='<option value="">单音轨</option>';
+}
+function applyVideoFilter(){
+ video.style.filter='brightness('+($('fltBright').value/100)+') contrast('+($('fltContrast').value/100)+') saturate('+($('fltSaturate').value/100)+')';
+}
+['fltBright','fltContrast','fltSaturate'].forEach(function(id){$(id).addEventListener('input',applyVideoFilter)});
+$('fltResetBtn').onclick=function(){video.style.filter='';$('fltBright').value=100;$('fltContrast').value=100;$('fltSaturate').value=100;toast('画面已还原')};
+$('pitchCheck').onchange=function(){video.preservesPitch=this.checked;try{video.mozPreservesPitch=this.checked}catch(e){} toast(this.checked?'变速保音调：已开':'变速保音调：已关（变速会变调）')};
+$('abABtn').onclick=function(){abA=video.currentTime;$('abState').textContent='A = '+fmt(abA)+(abB!==null?' · B = '+fmt(abB):'');toast('A 点已设：'+fmt(abA))};
+$('abBBtn').onclick=function(){
+ if(abA===null){toast('先设 A 点');return}
+ if(video.currentTime<=abA){toast('B 点要在 A 点之后');return}
+ abB=video.currentTime;$('abState').textContent='A = '+fmt(abA)+' · B = '+fmt(abB)+' · 循环中';toast('A-B 循环已开：'+fmt(abA)+' — '+fmt(abB));
+};
+$('abClearBtn').onclick=function(){abA=null;abB=null;$('abState').textContent='';toast('A-B 循环已取消')};
+video.addEventListener('timeupdate',function(){
+ if(abA!==null&&abB!==null&&!video.paused&&video.currentTime>=abB)video.currentTime=abA;
+});
+function frameStep(dir){video.pause();video.currentTime=Math.max(0,Math.min(video.duration||0,video.currentTime+dir*(1/currentFps)))}
+$('frameBackBtn').onclick=function(){frameStep(-1)};
+$('frameFwdBtn').onclick=function(){frameStep(1)};
+$('shotBtn').onclick=function(){
+ if(!video.videoWidth){toast('视频还没加载出画面，稍后再截');return}
+ var c=document.createElement('canvas');c.width=video.videoWidth;c.height=video.videoHeight;
+ c.getContext('2d').drawImage(video,0,0,c.width,c.height);
+ c.toBlob(function(b){if(!b){toast('截图失败');return}var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='screenshot-'+Math.round(video.currentTime)+'s.png';a.click();setTimeout(function(){URL.revokeObjectURL(a.href)},5000);toast('截图已保存')},'image/png');
+};
+/* 字幕：SRT 转 VTT 直接上轨；ASS 只提对白文字（浏览器画不出 ASS 的样式与特效，如实说明） */
+function srtToVtt(t){
+ t=String(t||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim();
+ var blocks=t.split(/\n\s*\n/);var out=['WEBVTT',''];
+ blocks.forEach(function(b){
+  var lines=b.split('\n').filter(function(x){return x.trim()!==''});
+  if(!lines.length)return;
+  if(/^\d+$/.test(lines[0]))lines.shift();
+  if(lines.length<2)return;
+  lines[0]=lines[0].replace(/,/g,'.');
+  out.push(lines.join('\n'));out.push('');
+ });
+ return out.join('\n');
+}
+function assToVtt(t){
+ var out=['WEBVTT',''];
+ String(t||'').split(/\n/).forEach(function(line){
+  if(line.indexOf('Dialogue:')!==0)return;
+  var parts=line.slice(9).split(',');
+  if(parts.length<10)return;
+  var start=parts[1].trim(),end=parts[2].trim(),text=parts.slice(9).join(',').replace(/\{[^}]*\}/g,'').replace(/\\N/g,'\n').trim();
+  if(!text)return;
+  function norm(s){var m=s.match(/^(\d+):(\d\d):(\d\d)\.(\d\d)$/);if(!m)return s;return ('0'+m[1]).slice(-2)+':'+m[2]+':'+m[3]+'.'+m[4]+'0'}
+  out.push(norm(start)+' --> '+norm(end));out.push(text);out.push('');
+ });
+ return out.join('\n');
+}
+$('subBtn').onclick=function(){$('subFile').click()};
+$('subFile').addEventListener('change',function(){
+ var f=this.files&&this.files[0];this.value='';if(!f)return;
+ var ext=(f.name.split('.').pop()||'').toLowerCase();
+ var reader=new FileReader();
+ reader.onload=function(){
+  var vtt=ext==='vtt'?String(reader.result||''):ext==='ass'||ext==='ssa'?assToVtt(reader.result):srtToVtt(reader.result);
+  if(subTrackEl){try{subTrackEl.remove()}catch(e){}}
+  var blob=new Blob([vtt],{type:'text/vtt'});
+  subTrackEl=document.createElement('track');subTrackEl.kind='subtitles';subTrackEl.label='外挂字幕';subTrackEl.srclang='zh';subTrackEl.src=URL.createObjectURL(blob);
+  subTrackEl.default=true;video.appendChild(subTrackEl);
+  try{video.textTracks[0].mode='showing'}catch(e){}
+  $('subState').textContent=f.name+(ext==='ass'||ext==='ssa'?'（ASS 样式不还原，只显示对白）':'');
+  toast('字幕已加载：'+f.name);
+ };
+ reader.readAsText(f);
+});
+/* 多音轨：Chromium 暴露 audioTracks 时才可切换，否则如实显示单音轨 */
+video.addEventListener('loadedmetadata',function(){
+ var sel=$('audioTrackSel');sel.innerHTML='';
+ var tracks=video.audioTracks;
+ if(tracks&&tracks.length>1){
+  for(var i=0;i<tracks.length;i++){var o=document.createElement('option');o.value=i;o.textContent=(tracks[i].label||('音轨 '+(i+1)))+(tracks[i].language?' · '+tracks[i].language:'');sel.appendChild(o)}
+  for(var j=0;j<tracks.length;j++){if(tracks[j].enabled)sel.value=j}
+ }else{sel.innerHTML='<option value="">单音轨</option>'}
+});
+$('audioTrackSel').onchange=function(){
+ var tracks=video.audioTracks;if(!tracks)return;
+ for(var i=0;i<tracks.length;i++)tracks[i].enabled=(i===parseInt(this.value,10));
+ toast('已切换音轨');
+};
+/* 媒体信息：画面已知的直接显示；桌面版本地文件再用 ffprobe 读编码/帧率/码率（没装 ffprobe 就如实说） */
+$('mediaInfoBtn').onclick=function(){
+ var p=$('mediaInfoPanel');
+ if(!p.classList.contains('hidden')){p.classList.add('hidden');return}
+ var lines=[];
+ lines.push('来源：'+($('metaSrc').textContent||'—'));
+ lines.push('格式：'+($('metaFmt').textContent||'—')+'　分辨率：'+(video.videoWidth?video.videoWidth+' × '+video.videoHeight:'—')+'　时长：'+(video.duration?fmt(video.duration):'—'));
+ if(currentLocalFile)lines.push('文件：'+currentLocalFile.name+'　'+fileSizeMB(currentLocalFile));
+ try{
+  lines.push('已解码视频：'+(video.webkitVideoDecodedByteCount||0)+' 字节　已解码音频：'+(video.webkitAudioDecodedByteCount||0)+' 字节（音频为 0 = 无声片源或 AC3/DTS 等编码不受支持）');
+ }catch(e){}
+ p.textContent=lines.join('\n');p.classList.remove('hidden');
+ if(IS_DESKTOP&&currentLocalFilePath&&window.desktopAPI&&desktopAPI.mediaInfo){
+  desktopAPI.mediaInfo(currentLocalFilePath).then(function(r){
+   if(!r||!r.ok){p.textContent+='\n详细编码：'+(r&&r.reason==='no_ffprobe'?'本机未装 ffprobe，装一个就能显示完整编码信息':'读取失败');return}
+   p.textContent+='\n容器：'+(r.format||'—')+'　总码率：'+(r.bitrate?(r.bitrate/1000).toFixed(0)+' kbps':'—');
+   (r.streams||[]).forEach(function(s){
+    if(s.type==='video'){p.textContent+='\n视频：'+(s.codec||'—')+' '+(s.width||'')+'×'+(s.height||'')+'　帧率：'+(s.fps||'—');var fr=(s.fps||'').split('/');if(fr.length===2&&+fr[1])currentFps=Math.round(+fr[0]/+fr[1])||30}
+    if(s.type==='audio')p.textContent+='\n音频：'+(s.codec||'—')+(s.channels?' · '+s.channels+' 声道':'')+(s.language?' · '+s.language:'');
+    if(s.type==='subtitle')p.textContent+='\n内挂字幕：'+(s.codec||'—')+(s.language?' · '+s.language:'');
+   });
+  }).catch(function(){});
+ }
+};
+/* 外部播放器：只在桌面版、有本地文件路径时出现 */
+$('openExtBtn').onclick=function(){
+ if(!currentLocalFilePath){toast('没有本地文件路径');return}
+ desktopAPI.openFilePlayer(currentLocalFilePath).then(function(r){
+  if(r&&r.ok)toast('已用系统默认播放器打开（装了 PotPlayer 就是它）');
+  else toast('打不开：'+(r&&r.reason||'未知原因'));
+ }).catch(function(){toast('打不开系统播放器')});
+};
 
 /* ================= 本地文件导入（不登录也能播） ================= */
 function fileSizeMB(f){return (f.size/1048576).toFixed(2)+' MB'}
@@ -386,6 +515,9 @@ function handleFile(f){
  }
  if(localVideoURL)URL.revokeObjectURL(localVideoURL);
  localVideoURL=URL.createObjectURL(f);
+ currentLocalFile=f;currentLocalFilePath=(IS_DESKTOP&&window.desktopAPI&&desktopAPI.filePath)?desktopAPI.filePath(f):'';
+ $('openExtBtn').style.display=(IS_DESKTOP&&currentLocalFilePath)?'':'none';
+ resetVideoPro();
  switchMode('mv');video.muted=false;video.src=localVideoURL;
  $('mvTitle').textContent=f.name+' — 本地视频';
  $('metaFmt').textContent=ext;$('metaSrc').textContent='本地文件';$('metaRes').textContent='读取中…';
