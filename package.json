@@ -75,7 +75,7 @@
       "uninstallerSidebar": "build/installerSidebar.bmp",
       "installerHeader": "build/installerHeader.bmp",
       "include": "build/installer.nsh",
-      "artifactName": "全能播放器-${version}-Setup.${ext}"
+      "artifactName": "AllInOnePlayer-${version}-Setup.${ext}"
     },
     "publish": null,
     "mac": {
@@ -89,7 +89,7 @@
         }
       ],
       "icon": "build/icon.icns",
-      "artifactName": "全能播放器-${version}-${arch}.${ext}",
+      "artifactName": "AllInOnePlayer-${version}-${arch}.${ext}",
       "category": "public.app-category.music"
     },
     "linux": {
@@ -108,7 +108,7 @@
         }
       ],
       "icon": "build/icon.png",
-      "artifactName": "全能播放器-${version}-${arch}.${ext}",
+      "artifactName": "AllInOnePlayer-${version}-${arch}.${ext}",
       "category": "Music"
     }
   },
