@@ -4,7 +4,7 @@
 ![Platform: Web](https://img.shields.io/badge/Web-PWA-blue.svg)
 ![Platform: Desktop](https://img.shields.io/badge/Desktop-Windows%20%7C%20macOS%20%7C%20Linux-9cf.svg)
 ![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)
-![Version](https://img.shields.io/badge/Version-1.0.10-orange.svg)
+![Version](https://img.shields.io/badge/Version-1.0.11-orange.svg)
 
 > **一句话：像 Mineradio，但多了一个影院。**
 > One player for all your music — plus a cinema for MVs and videos, in original format and original resolution.
@@ -38,7 +38,9 @@
 - **MV / 视频影院（独有）**：在线演示 MV 与**本地文件**都按**原始格式、原始分辨率**播放，界面显示源文件真实分辨率、格式与来源；支持全屏、画中画、倍速、1:1 原生尺寸显示。本地音频（MP3/WAV/FLAC 等）与视频（MP4/WebM/MOV 等）拖放或点选即播，只在本机解码、不上传。浏览器解码不了的少数编码（如部分 MKV/AVI）请用桌面版（Electron 完整解码）打开。
 - **搜索与切源真实生效**：搜索实时过滤曲库与 MV；切换音乐源时立即清空旧内容并显示骨架屏，标题与内容同时换新源，不串台。
 
-## 连接原理（借鉴 Mineradio，不做假登录）
+## 连接原理（基于 Mineradio，不做假登录）
+
+> 登录窗代码照 Mineradio 的 `desktop/main.js` 原样抄过来（GPL-3.0）：QQ / 网易云的登录窗流程、暖身、自动点「登录」、Cookie 判定，全部按 Mineradio 的实现；登录窗本身从不重载页面，页面加载完自动点一下「登录」，二维码自己弹出来。
 
 1. **选平台 → 官方扫码登录 → 同步收藏**（页面内有三步向导）：点「登录账号」选平台后，跳转到**平台官方登录页**扫码登录（网易云/QQ/酷狗/汽水扫码，QQ 可选 QQ 扫码或微信扫码）。播放器只是一个窗口，**不在本站输入任何平台密码**；登录凭证 Cookie 只保存在官方页面与本机（桌面版本地存储）。失效时如实显示「已过期」，未登录就是「未登录」，绝不假装已连接。
 2. **资料库语义统一**：只同步用户**已收藏**的专辑/艺人/歌单，不做全站目录浏览。八个源共用同一套「音乐源」抽象与端点表：
