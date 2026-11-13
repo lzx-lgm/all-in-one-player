@@ -7,6 +7,11 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# 发布安装包到 Releases 需要写权限（缺省的只读 token 会在更新 release 时报
+# "Resource not accessible by integration"）
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -36,14 +41,21 @@ jobs:
             release/*.dmg
             release/*.AppImage
             release/*.deb
-          if-no-files-found: ignore
-      - name: Publish to GitHub Releases
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+          if-no-files-found: error
+
+  # 三个系统都打完后，由单独一个任务统一发布，避免三个任务同时
+  # 往同一个 release 写文件互相冲突。
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          files: |
-            release/*.exe
-            release/*.dmg
-            release/*.AppImage
-            release/*.deb
-          fail_on_unmatched_files: false
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dist/*
+          fail_on_unmatched_files: true
