@@ -20,6 +20,7 @@
 </head>
 <body>
 <canvas id="bgCanvas" aria-hidden="true"></canvas>
+<div id="bgMedia" aria-hidden="true"></div>
 <div class="vignette" aria-hidden="true"></div>
 
 <header class="topbar">
@@ -39,7 +40,8 @@
   <div class="stage">
     <aside class="glass stage-side">
       <div class="stage-kicker">LISTENING TODAY · 今日聆听</div>
-      <div class="quote">“让今天的声音，<br>从你<em>喜欢的地方</em>开始。”</div>
+      <div class="big-clock"><span id="bigClock">--:--</span><span id="bigDate"></span></div>
+      <div class="quote" id="dailyQuote">“让今天的声音，<br>从你<em>喜欢的地方</em>开始。”</div>
       <div class="stat-row">
         <div><b id="statSongs">12 首</b><span>演示曲库</span></div>
         <div><b>8 平台</b><span>统一聚合</span></div>
@@ -57,29 +59,169 @@
       <div id="stageLyric">我们穿过城市发光的海</div>
       <div id="stageLyricSub">NEON LIGHTS ARE CALLING OUT TONIGHT</div>
       <canvas id="viz" width="640" height="72"></canvas>
-      <div class="presets" id="presets">
-        <button class="preset active" data-preset="galaxy">星河 · 默认</button>
-        <button class="preset" data-preset="aurora">极光</button>
-        <button class="preset" data-preset="flow">流光</button>
-        <button class="preset" data-preset="dusk">暮色</button>
-      </div>
     </section>
 
-    <aside class="glass stage-side console">
-      <h3>视觉控制台</h3>
-      <p>MINERADIO · 即时生效 — 调粒子、溢光与歌词，舞台马上变。</p>
-      <div class="ctl"><label>界面高亮</label>
-        <div class="swatches">
-          <button class="swatch active" data-color="#00F5D4" style="background:#00F5D4" aria-label="薄荷绿"></button>
-          <button class="swatch" data-color="#F4D28A" style="background:#F4D28A" aria-label="暖金"></button>
-          <button class="swatch" data-color="#7FD8FF" style="background:#7FD8FF" aria-label="天空蓝"></button>
-          <button class="swatch" data-color="#ff8fa3" style="background:#ff8fa3" aria-label="暮色玫瑰"></button>
+    <aside class="glass stage-side console" id="visualConsole">
+      <div class="console-head"><div><h3>视觉控制台</h3><p>MINERADIO VISUALS · 鼠标移开自动隐藏</p></div><button class="glass-btn" id="consoleHotkeys" style="min-height:34px">热键</button></div>
+      <div class="console-search"><input id="consoleSearch" placeholder="搜索功能，如：粒子、缓存、歌词"><button id="consoleUndo" title="撤销上一次调整">↩ 撤销</button><button id="consoleHist" title="调整历史">◷ 历史</button></div>
+      <div class="console-tabs" id="consoleTabs">
+        <button class="ctab active" data-tab="common">常用</button>
+        <button class="ctab" data-tab="ui">界面</button>
+        <button class="ctab" data-tab="lyric">歌词</button>
+        <button class="ctab" data-tab="motion">动效</button>
+        <button class="ctab" data-tab="shelf">歌单架</button>
+        <button class="ctab" data-tab="system">系统</button>
+      </div>
+      <div class="console-body">
+      <!-- 常用 -->
+      <div class="cpanel active" data-panel="common">
+        <div class="csec"><b>视觉预设</b><span>先选整体风格，再进入细节调整</span>
+          <div class="preset-grid" id="presets">
+            <button class="preset active" data-preset="galaxy">星河<span>壁纸粒子 · 音乐律动</span></button>
+            <button class="preset" data-preset="vinyl">唱片<span>唱片 · 圆形封面</span></button>
+            <button class="preset" data-preset="aurora">极光<span>极光 · 流动光带</span></button>
+            <button class="preset" data-preset="flow">流光<span>流光 · 暖金渐变</span></button>
+            <button class="preset" data-preset="dusk">暮色<span>暮色 · 玫瑰暖调</span></button>
+            <button class="preset" data-preset="sonic">音域回响<span>音域地形 · 声波起伏</span></button>
+            <button class="preset" data-preset="planet">星球<span>星球 · 雕塑感</span></button>
+            <button class="preset" data-preset="tunnel">滚筒<span>隧道 · 沉浸感</span></button>
+            <button class="preset" data-preset="void">虚空<span>无粒子 · 自定义背景</span></button>
+          </div>
+        </div>
+        <div class="csec"><b>用户存档</b><span>保存、应用和分享整套视觉参数</span>
+          <div class="row-btns"><button class="cbtn" id="saveVisual">保存当前视觉</button><button class="cbtn" id="exportVisual">复制参数</button></div>
+          <div id="visualSaves" class="saves"></div>
+        </div>
+        <div class="csec"><b>恢复与整理</b><span>恢复全部默认参数</span>
+          <div class="row-btns"><button class="cbtn" id="resetVisual">恢复默认</button></div>
         </div>
       </div>
-      <div class="ctl"><label>粒子强度 <output id="oP">60</output></label><input type="range" id="fxParticles" min="0" max="100" value="60"></div>
-      <div class="ctl"><label>歌词溢光 <output id="oG">22</output></label><input type="range" id="fxGlow" min="0" max="48" value="22"></div>
-      <div class="ctl"><label>歌词大小 <output id="oL">100%</output></label><input type="range" id="fxLyric" min="70" max="130" value="100"></div>
-      <div class="ctl"><label>律动强度 <output id="oB">100%</output></label><input type="range" id="fxBeat" min="30" max="180" value="100"></div>
+      <!-- 界面 -->
+      <div class="cpanel" data-panel="ui">
+        <div class="csec"><b>背景媒体</b><span>颜色、封面、图片、视频与 Wallpaper Engine</span>
+          <div class="crow"><span>背景颜色</span><input type="color" id="bgColor" value="#000000"><button class="cbtn" id="bgCoverBtn">封面</button></div>
+          <div class="crow"><span>背景媒体</span><button class="cbtn" id="bgPickBtn">选择</button><button class="cbtn" id="bgFitBtn">裁切</button><button class="cbtn" id="bgClearBtn">清除</button></div>
+          <div class="crow"><span class="we-badge">WE</span><span>Wallpaper Engine<br><small>未启用 · 原背景保留</small></span><button class="cbtn" id="weBtn">识别 / 导入</button></div>
+          <input type="file" id="bgMediaFile" accept="image/*,video/*" class="hidden">
+          <div class="ctl"><label>背景透明度 <output id="oBgOp">1.00</output></label><input type="range" id="bgOpacity" min="0" max="100" value="100"></div>
+          <div class="ctl"><label>裁切左右 <output id="oCropX">50</output></label><input type="range" id="cropX" min="0" max="100" value="50"></div>
+          <div class="ctl"><label>裁切上下 <output id="oCropY">50</output></label><input type="range" id="cropY" min="0" max="100" value="50"></div>
+          <div class="ctl"><label>裁切缩放 <output id="oCropZoom">1.00</output></label><input type="range" id="cropZoom" min="50" max="200" value="100"></div>
+        </div>
+        <div class="csec"><b>界面配色</b><span>界面高亮、视觉主色与图标颜色</span>
+          <div class="swatches">
+            <button class="swatch active" data-color="#00F5D4" style="background:#00F5D4" aria-label="薄荷绿"></button>
+            <button class="swatch" data-color="#F4D28A" style="background:#F4D28A" aria-label="暖金"></button>
+            <button class="swatch" data-color="#7FD8FF" style="background:#7FD8FF" aria-label="天空蓝"></button>
+            <button class="swatch" data-color="#ff8fa3" style="background:#ff8fa3" aria-label="暮色玫瑰"></button>
+          </div>
+        </div>
+        <div class="csec"><b>玻璃与左栏</b><span>窗口玻璃质感和歌单栏吹出手段</span>
+          <div class="ctl"><label>玻璃模糊 <output id="oGlass">20</output></label><input type="range" id="glassBlur" min="0" max="40" value="20"></div>
+        </div>
+      </div>
+      <!-- 歌词 -->
+      <div class="cpanel" data-panel="lyric">
+        <div class="csec"><b>显示与翻译</b><span>歌词来源、行数和双语译文</span>
+          <div class="seg" id="lyricModeSeg"><button class="seg-btn active" data-lmode="orig">原词</button><button class="seg-btn" data-lmode="custom">自定义</button></div>
+          <div class="seg" id="lyricRowsSeg"><button class="seg-btn" data-rows="1">单行</button><button class="seg-btn" data-rows="2">双行</button><button class="seg-btn" data-rows="3">三行</button><button class="seg-btn active" data-rows="0">沉浸</button></div>
+          <div class="ctl"><label>显示行数 <output id="oLyricLines">3</output></label><input type="range" id="lyricLines" min="1" max="5" value="3"></div>
+          <div class="ctl"><label>译文间距 <output id="oTransGap">0.92</output></label><input type="range" id="transGap" min="50" max="150" value="92"></div>
+          <div class="ctl"><label>译文字号 <output id="oTransSize">0.65</output></label><input type="range" id="transSize" min="40" max="100" value="65"></div>
+          <div class="ctl"><label>译文透明 <output id="oTransAlpha">0.86</output></label><input type="range" id="transAlpha" min="30" max="100" value="86"></div>
+          <div id="customLyricWrap" class="hidden"><textarea id="customLyrics" rows="4" placeholder="自定义歌词：一行一句，会按当前歌曲逐行滚动。保存后只对这首歌生效。"></textarea><button class="cbtn" id="saveCustomLyric" style="margin-top:8px">保存这首歌的自定义歌词</button></div>
+        </div>
+        <div class="csec"><b>颜色与光效</b><span>文字、高亮、溢光和亮度可读性</span>
+          <div class="crow"><span>歌词颜色</span><input type="color" id="lyricColor" value="#ffffff"></div>
+          <div class="ctl"><label>歌词溢光 <output id="oG">22</output></label><input type="range" id="fxGlow" min="0" max="48" value="22"></div>
+        </div>
+        <div class="csec"><b>字体与排版</b><span>字体、字重、大小、位置和角度</span>
+          <div class="ctl"><label>歌词大小 <output id="oL">100%</output></label><input type="range" id="fxLyric" min="70" max="130" value="100"></div>
+        </div>
+        <div class="csec"><b>歌词动画</b><span>滚动手感、上下行层次和故障效果</span>
+          <div class="crow"><span>平滑滚动</span><button class="cbtn toggle on" id="lyricAnimToggle">开</button></div>
+        </div>
+        <div class="csec"><b>桌面歌词</b><span>桌面层开关、位置、透明度和帧数</span>
+          <div class="crow"><span id="deskLyricState">桌面版小窗歌词</span><button class="cbtn" id="desktopLyricsBtn">打开</button></div>
+        </div>
+      </div>
+      <!-- 动效 -->
+      <div class="cpanel" data-panel="motion">
+        <div class="csec"><b>基础画面</b><span>整体律动、景深、封面和电影镜头</span>
+          <div class="ctl"><label>律动强度 <output id="oB">100%</output></label><input type="range" id="fxBeat" min="30" max="180" value="100"></div>
+          <div class="ctl"><label>画面景深 <output id="oDepth">0.20</output></label><input type="range" id="depthFx" min="0" max="100" value="20"></div>
+          <div class="ctl"><label>封面清晰度 <output id="oCoverSharp">119×119</output></label><input type="range" id="coverSharp" min="20" max="200" value="119"></div>
+          <div class="ctl"><label>电影镜头 <output id="oCamZoom">0.50</output></label><input type="range" id="camZoom" min="0" max="100" value="50"></div>
+          <div class="crow"><span>电影镜头</span><button class="cbtn toggle on" id="camToggle">开</button></div>
+        </div>
+        <div class="csec"><b>粒子与光影</b><span>粒子尺寸、运动、扭曲和溢光</span>
+          <div class="ctl"><label>粒子强度 <output id="oP">60</output></label><input type="range" id="fxParticles" min="0" max="100" value="60"></div>
+          <div class="ctl"><label>粒子尺寸 <output id="oParticleSize">1.0</output></label><input type="range" id="particleSize" min="50" max="300" value="100"></div>
+        </div>
+        <div class="csec"><b>音域地形</b><span>地形形态、颜色和空间位置</span>
+          <div class="crow"><span>音域地形</span><button class="cbtn toggle on" id="terrainToggle">开</button></div>
+        </div>
+        <div class="csec"><b>频谱响应</b><span>Kick 检测、频段范围和各段权重</span>
+          <div class="ctl"><label>频谱灵敏度 <output id="oSpectrum">1.00</output></label><input type="range" id="spectrumSens" min="30" max="200" value="100"></div>
+        </div>
+        <div class="csec"><b>音域方块</b><span>浮空方块的数量、尺寸和速度</span>
+          <div class="ctl"><label>频谱方块数 <output id="oVizBars">44</output></label><input type="range" id="vizBars" min="16" max="96" value="44" step="4"></div>
+        </div>
+        <div class="csec"><b>音域回响 · WE</b><span>Wallpaper Engine 派生地形的响应与配色</span>
+          <p class="cnote">需要 Wallpaper Engine 联动，本版未启用；地形响应走上方「音域地形」。</p>
+        </div>
+      </div>
+      <!-- 歌单架 -->
+      <div class="cpanel" data-panel="shelf">
+        <div class="csec"><b>显示方式</b><span>模式、镜头、常驻状态和内容来源</span>
+          <div class="seg" id="shelfModeSeg"><button class="seg-btn" data-smode="off">关闭</button><button class="seg-btn" data-smode="side">侧栏</button><button class="seg-btn active" data-smode="stage">舞台</button></div>
+          <div class="seg" id="shelfCamSeg"><button class="seg-btn active" data-scam="dynamic">动态镜头</button><button class="seg-btn" data-scam="static">静态镜头</button></div>
+          <div class="seg" id="shelfHideSeg"><button class="seg-btn active" data-shide="auto">自动隐藏</button><button class="seg-btn" data-shide="stay">常驻</button></div>
+          <div class="crow"><span>显示播客歌单</span><button class="cbtn toggle" id="shelfPodcastToggle">关</button></div>
+          <div class="crow"><span>合并收藏歌单</span><button class="cbtn toggle" id="shelfMergeToggle">关</button></div>
+        </div>
+        <div class="csec"><b>外观与位置</b><span>歌单架颜色、大小、位置和透明度</span>
+          <div class="ctl"><label>歌单架大小 <output id="oShelfSize">100%</output></label><input type="range" id="shelfSize" min="70" max="130" value="100"></div>
+        </div>
+        <div class="csec"><b>详情页动画</b><span>展开、关闭和歌曲行入场手感</span>
+          <div class="ctl"><label>动画时长 <output id="oShelfAnim">0.35s</output></label><input type="range" id="shelfAnim" min="10" max="80" value="35"></div>
+        </div>
+        <div class="csec"><b>唤出动画</b><span>歌单架整体唤出、收起和镜头速度</span>
+          <div class="seg" id="shelfEnterSeg"><button class="seg-btn active" data-enter="fade">淡入</button><button class="seg-btn" data-enter="up">上滑</button><button class="seg-btn" data-enter="zoom">缩放</button></div>
+        </div>
+        <div class="csec"><b>摄像头交互</b><span>摄像头手势触碰开关</span>
+          <div class="crow"><span>摄像头手势</span><button class="cbtn" id="camInteractBtn">未启用</button></div>
+        </div>
+      </div>
+      <!-- 系统 -->
+      <div class="cpanel" data-panel="system">
+        <div class="csec"><b>启动与退出</b><span>关闭窗口行为和恢复播放方式</span>
+          <div class="seg" id="exitModeSeg"><button class="seg-btn active" data-exit="quit">直接退出</button><button class="seg-btn" data-exit="tray">后台托盘</button></div>
+          <div class="crow"><span>启动自动播放</span><button class="cbtn toggle" id="autoplayToggle">关</button></div>
+          <div class="crow"><span>秒启动跳过启动页</span><button class="cbtn" disabled title="本版没有启动页">无启动页</button></div>
+          <div class="seg" id="resumeSeg"><button class="seg-btn active" data-resume="pos">按上次进度</button><button class="seg-btn" data-resume="top">重播整首</button></div>
+        </div>
+        <div class="csec"><b>播放输出</b><span>音频输出设备和路由面板</span>
+          <select id="outDeviceSel" class="speed-sel" style="width:100%"><option value="">默认输出设备</option></select>
+        </div>
+        <div class="csec"><b>性能与后台</b><span>画质档位、后台渲染和直播保持</span>
+          <div class="seg" id="qualitySeg"><button class="seg-btn" data-q="low">流畅</button><button class="seg-btn active" data-q="mid">均衡</button><button class="seg-btn" data-q="high">画质</button></div>
+        </div>
+        <div class="csec"><b>内容管理</b><span>播放器压缩、系统释放范围和阈值</span>
+          <div class="row-btns"><button class="cbtn" id="clearFavsBtn">清空收藏</button><button class="cbtn" id="clearCustomBtn">清空自定义歌词</button></div>
+        </div>
+        <div class="csec"><b>缓存与存储</b><span>统一缓存目录、占用和各类路径</span>
+          <p class="cnote" id="storageInfo">正在统计本机缓存…</p>
+          <div class="row-btns"><button class="cbtn" id="clearCacheBtn">清除缓存</button></div>
+        </div>
+        <div class="csec"><b>实验功能</b><span>尚未开放或需要谨慎使用的能力</span>
+          <p class="cnote">本版没有实验功能开关。</p>
+        </div>
+        <div class="csec"><b>其他设置</b><span>尚未归入明确分类的兼容项</span>
+          <div class="row-btns"><button class="cbtn" id="resetAllBtn">恢复全部设置</button></div>
+        </div>
+      </div>
+      </div>
     </aside>
   </div>
 
