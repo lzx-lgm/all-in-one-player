@@ -4,7 +4,7 @@
 ![Platform: Web](https://img.shields.io/badge/Web-PWA-blue.svg)
 ![Platform: Desktop](https://img.shields.io/badge/Desktop-Windows%20%7C%20macOS%20%7C%20Linux-9cf.svg)
 ![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)
-![Version](https://img.shields.io/badge/Version-1.0.1-orange.svg)
+![Version](https://img.shields.io/badge/Version-1.0.2-orange.svg)
 
 > **一句话：像 Mineradio，但多了一个影院。**
 > One player for all your music — plus a cinema for MVs and videos, in original format and original resolution.
