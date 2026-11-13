@@ -175,12 +175,19 @@ function handlePlayReject(err,idx){
  playFailCount=0;
  toast('音源连续打不开，可能是网络问题：演示歌曲来自 soundhelix.com，请检查网络后重试');
 }
+/* 媒体地址：桌面版走本机 /api/audio 代理（带平台 Referer + Range 透传），
+   网页版没有本机服务，用直链；本地文件是 blob:，永远不走代理 */
+function proxiedMediaUrl(u) {
+  if (!u || u.indexOf('blob:') === 0 || u.indexOf('data:') === 0) return u;
+  if (window.desktopAPI) return '/api/audio?url=' + encodeURIComponent(u);
+  return u;
+}
 function playTrack(idx){
  var t=tracks[idx];
  if(t&&t.real){playRealTrack(t);return}
  if(!playable(t)){attemptAutoSource(t);return}
  if(current===idx&&audio.src){if(audio.paused)audio.play().catch(function(e){handlePlayReject(e,idx)});else audio.pause();syncPlayUI();renderTracks();return}
- current=idx;audio.src=t.src;audio.playbackRate=parseFloat($('speedSel').value);video.pause();
+ current=idx;audio.src=proxiedMediaUrl(t.src);audio.playbackRate=parseFloat($('speedSel').value);video.pause();
  audio.play().then(function(){playFailCount=0;errCount=0;toast('正在播放：'+t.title+'（'+platById(t.plat).name+' 源 · 应用内直链）')}).catch(function(e){handlePlayReject(e,idx)});
  updateStage(t);syncPlayUI();renderTracks();initViz();
 }
@@ -314,7 +321,7 @@ function renderMVs(){
 }
 function loadMV(mv){
  if(localVideoURL){URL.revokeObjectURL(localVideoURL);localVideoURL=null}
- video.muted=false;video.src=mv.src;$('mvTitle').textContent=mv.title+' — '+mv.artist;
+ video.muted=false;video.src=proxiedMediaUrl(mv.src);$('mvTitle').textContent=mv.title+' — '+mv.artist;
  $('metaFmt').textContent=extOf(mv.src);$('metaSrc').textContent='演示 MV · '+mv.platName;$('metaRes').textContent='读取中…';
  $('localMeta').textContent='';
  video.play().then(function(){toast('正在原画播放：'+mv.title);checkVideoAudio()}).catch(function(){toast('点 ▶ 播放按钮开始播放')});
@@ -758,7 +765,7 @@ function playRealTrack(t) {
     .then(function (data) {
       if (data.ok && data.url) {
         current = -1; realCurrent = realTracks.indexOf(t);
-        audio.src = data.url; audio.playbackRate = parseFloat($('speedSel').value); video.pause();
+        audio.src = proxiedMediaUrl(data.url); audio.playbackRate = parseFloat($('speedSel').value); video.pause();
         audio.play().then(function () { toast('正在播放（真同步）：' + t.title); }).catch(function (e) { toast(e && e.name === 'NotAllowedError' ? '浏览器拦截了播放：点一下页面，再按播放键' : '这首的真实音源没打开（可能网络问题或平台限制），请稍后再试'); });
         var demo = { title: t.title, artist: t.artist, plat: t.plat, color: t.color, dur: fmt((t.durationMs || 0) / 1000), lines: [[t.title, t.artist]] };
         updateStage(demo); syncPlayUI(); initViz(); renderTracks();
