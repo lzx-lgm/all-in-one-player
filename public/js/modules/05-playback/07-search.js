@@ -442,13 +442,15 @@ function songProviderKey(song) {
   if (song && (song.provider === 'qishui' || song.source === 'qishui' || song.type === 'qishui')) return 'qishui';
   if (song && (song.provider === 'kugou' || song.source === 'kugou' || song.type === 'kugou' || song.hash || song.audioHash)) return 'kugou';
   if (song && (song.provider === 'apple' || song.source === 'apple' || song.type === 'apple' || song.trackId)) return 'apple';
+  if (song && (song.provider === 'kuwo' || song.source === 'kuwo' || song.type === 'kuwo')) return 'kuwo';
+  if (song && (song.provider === 'ytmusic' || song.source === 'ytmusic' || song.type === 'ytmusic' || song.videoId)) return 'ytmusic';
   return 'netease';
 }
 function songSourceTagHtml(song, opts) {
   opts = opts || {};
   var rawKey = song && (song.resolvedPlaybackProvider || song.playbackProvider || song.audioProvider || song.providerResolved || '');
-  var key = /^(netease|qq|kugou|qishui|spotify|apple)$/.test(String(rawKey || '')) ? String(rawKey) : songProviderKey(song);
-  var label = key === 'qq' ? 'QQ' : (key === 'kugou' ? 'KG' : (key === 'qishui' ? 'QS' : (key === 'spotify' ? 'SP' : (key === 'apple' ? 'AP' : 'NE'))));
+  var key = /^(netease|qq|kugou|qishui|spotify|apple|kuwo|ytmusic)$/.test(String(rawKey || '')) ? String(rawKey) : songProviderKey(song);
+  var label = key === 'qq' ? 'QQ' : (key === 'kugou' ? 'KG' : (key === 'qishui' ? 'QS' : (key === 'spotify' ? 'SP' : (key === 'apple' ? 'AP' : (key === 'kuwo' ? 'KW' : (key === 'ytmusic' ? 'YT' : 'NE'))))));
   if (opts.switcher) {
     return '<button type="button" class="tag-source ' + key + ' control-source-chip" title="切换音源" aria-haspopup="true" onclick="toggleControlSourceSwitcher(event)">' + label + '</button>';
   }
@@ -462,7 +464,9 @@ function controlSourceProviders() {
     { key: 'kugou', label: 'KG', title: '酷狗' },
     { key: 'qishui', label: 'QS', title: '汽水' },
     { key: 'spotify', label: 'SP', title: 'Spotify' },
-    { key: 'apple', label: 'AP', title: 'Apple Music' }
+    { key: 'apple', label: 'AP', title: 'Apple Music' },
+    { key: 'kuwo', label: 'KW', title: '酷我' },
+    { key: 'ytmusic', label: 'YT', title: 'YouTube Music' }
   ];
 }
 function controlSourceProviderTitle(provider) {
@@ -475,6 +479,8 @@ function controlSourceSearchUrl(provider, query) {
   if (provider === 'qishui') return '/api/qishui/search?keywords=' + encodeURIComponent(query) + '&limit=8';
   if (provider === 'spotify') return '/api/spotify/search?keywords=' + encodeURIComponent(query) + '&limit=8';
   if (provider === 'apple') return '/api/apple/search?keywords=' + encodeURIComponent(query) + '&limit=8';
+  if (provider === 'kuwo') return '/api/kuwo/search?keywords=' + encodeURIComponent(query) + '&limit=8';
+  if (provider === 'ytmusic') return '/api/ytmusic/search?keywords=' + encodeURIComponent(query) + '&limit=8';
   return '/api/search?keywords=' + encodeURIComponent(query) + '&limit=10';
 }
 function ensureControlSourceSwitcher() {
@@ -748,7 +754,7 @@ function searchIntentPrefersQQ(q) {
   q = String(q || '').toLowerCase();
   return /(^|\s)qq($|\s)|qq音乐|qq音樂/.test(q);
 }
-var MUSIC_SEARCH_PROVIDER_ORDER = ['netease', 'qq', 'kugou', 'qishui', 'apple'];
+var MUSIC_SEARCH_PROVIDER_ORDER = ['netease', 'qq', 'kugou', 'qishui', 'apple', 'kuwo', 'ytmusic'];
 function searchProviderStatus(provider) {
   if (typeof platformStatus === 'function') return platformStatus(provider);
   if (provider === 'spotify') return spotifyLoginStatus;
@@ -768,10 +774,10 @@ function searchProviderCanSearch(provider) {
   if (provider === 'spotify') return !!(st.loggedIn && !st.reauthRequired);
   // These providers expose public catalogue metadata search. Login still controls
   // private recommendations, collections and playback rights, not discovery.
-  return provider === 'netease' || provider === 'qq' || provider === 'kugou' || provider === 'qishui' || provider === 'apple';
+  return provider === 'netease' || provider === 'qq' || provider === 'kugou' || provider === 'qishui' || provider === 'apple' || provider === 'kuwo' || provider === 'ytmusic';
 }
 function searchModeProvider(mode) {
-  return mode === 'netease' || mode === 'qq' || mode === 'kugou' || mode === 'qishui' || mode === 'apple' ? mode : '';
+  return mode === 'netease' || mode === 'qq' || mode === 'kugou' || mode === 'qishui' || mode === 'apple' || mode === 'kuwo' || mode === 'ytmusic' ? mode : '';
 }
 function activeSearchProvidersForMode(mode) {
   var specific = searchModeProvider(mode);
@@ -793,6 +799,8 @@ function searchProviderUrl(provider, q, limit, offset) {
   if (provider === 'qishui') return '/api/qishui/search?keywords=' + encodeURIComponent(q) + suffix;
   if (provider === 'spotify') return '/api/spotify/search?keywords=' + encodeURIComponent(q) + suffix;
   if (provider === 'apple') return '/api/apple/search?keywords=' + encodeURIComponent(q) + suffix;
+  if (provider === 'kuwo') return '/api/kuwo/search?keywords=' + encodeURIComponent(q) + suffix;
+  if (provider === 'ytmusic') return '/api/ytmusic/search?keywords=' + encodeURIComponent(q) + suffix;
   return '/api/search?keywords=' + encodeURIComponent(q) + suffix;
 }
 function simpleSearchNorm(text) {

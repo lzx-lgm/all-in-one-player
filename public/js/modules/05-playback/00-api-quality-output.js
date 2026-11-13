@@ -33,6 +33,8 @@ function normalizePlaybackProvider(provider) {
   if (provider === 'qishui') return 'qishui';
   if (provider === 'spotify') return 'spotify';
   if (provider === 'apple') return 'apple';
+  if (provider === 'kuwo') return 'kuwo';
+  if (provider === 'ytmusic') return 'ytmusic';
   return 'netease';
 }
 function normalizePlaybackQualityForProvider(value, provider) {

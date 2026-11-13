@@ -639,6 +639,12 @@ async function resolveAlbumGaplessPlaybackData(song) {
   if (playbackProvider === 'apple') {
     return apiJson('/api/apple/song/url?id=' + encodeURIComponent(song.id || song.providerSongId || song.trackId || ''), { timeoutMs: 9000 });
   }
+  if (playbackProvider === 'kuwo') {
+    return apiJson('/api/kuwo/song/url?id=' + encodeURIComponent(song.id || song.providerSongId || song.rid || ''), { timeoutMs: 9000 });
+  }
+  if (playbackProvider === 'ytmusic') {
+    return apiJson('/api/ytmusic/song/url?id=' + encodeURIComponent(song.id || song.providerSongId || song.videoId || ''), { timeoutMs: 9000 });
+  }
   return apiJson('/api/song/url?id=' + encodeURIComponent(song.id || '') + neteasePlaybackMatchQuery(song) + qualityParam, { timeoutMs: 14000 });
 }
 
@@ -1164,6 +1170,8 @@ async function playQueueAt(idx, opts) {
       var isQishuiPlayback = playbackProvider === 'qishui';
       var isSpotifyPlayback = playbackProvider === 'spotify';
       var isApplePlayback = playbackProvider === 'apple';
+      var isKuwoPlayback = playbackProvider === 'kuwo';
+      var isYtmusicPlayback = playbackProvider === 'ytmusic';
       var requestedQuality = normalizePlaybackQualityForProvider(opts.qualityOverride || getProviderPlaybackQuality(playbackProvider), playbackProvider);
       if (playbackProvider === 'netease' && requestedQuality === 'jymaster' && !hasProviderSvip('netease', loginStatus)) requestedQuality = 'hires';
       var runtimeQualityCap = playbackQualityCapValue(song, playbackProvider);
@@ -1199,6 +1207,10 @@ async function playQueueAt(idx, opts) {
           qualityParam, { timeoutMs: 9000 });
       } else if (isApplePlayback) {
         data = await apiJson('/api/apple/song/url?id=' + encodeURIComponent(song.id || song.providerSongId || song.trackId || ''), { timeoutMs: 9000 });
+      } else if (isKuwoPlayback) {
+        data = await apiJson('/api/kuwo/song/url?id=' + encodeURIComponent(song.id || song.providerSongId || song.rid || ''), { timeoutMs: 9000 });
+      } else if (isYtmusicPlayback) {
+        data = await apiJson('/api/ytmusic/song/url?id=' + encodeURIComponent(song.id || song.providerSongId || song.videoId || ''), { timeoutMs: 9000 });
       } else {
         data = await apiJson('/api/song/url?id=' + encodeURIComponent(song.id || '') + neteasePlaybackMatchQuery(song) + qualityParam, { timeoutMs: 14000 });
       }
