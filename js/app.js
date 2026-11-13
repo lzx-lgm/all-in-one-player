@@ -947,6 +947,8 @@ if (IS_DESKTOP) {
       var ws = $('wizStatus');
       if (ws) ws.textContent = '登录窗提示（' + platById(p.platform).name + '）：' + p.hint + ' 点「重试」可重开登录窗。';
       if (window.confirm('QQ 登录二维码空白，是否重开登录窗重试？')) window.desktopAPI.loginRetry(p.platform, p.identity);
+    } else if (kind === 'login-closed' && p.partial) {
+      toast(p.message || '账号验证已完成，但播放授权尚未生成，请重新打开登录窗完成授权');
     }
   });
   refreshDesktopAuth();
