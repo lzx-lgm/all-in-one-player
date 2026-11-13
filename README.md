@@ -1,8 +1,30 @@
 # All-in-One Player · 全能播放器 OmniRadio+
 
-公开仓库：**https://github.com/lzx-lgm/all-in-one-player**
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![Platform: Web](https://img.shields.io/badge/Web-PWA-blue.svg)
+![Platform: Desktop](https://img.shields.io/badge/Desktop-Windows%20%7C%20macOS%20%7C%20Linux-9cf.svg)
+![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)
+![Version](https://img.shields.io/badge/Version-1.0.0-orange.svg)
 
-一款「像 Mineradio、但比它多一块影院」的全能播放器：纯黑银河底、粒子视觉、歌词舞台、视觉控制台、3D 歌单架——再加上 Mineradio 没有的 **MV / 视频原始格式、原始分辨率直通播放**（不转码、不压缩、不裁切）。
+> **一句话：像 Mineradio，但多了一个影院。**
+> One player for all your music — plus a cinema for MVs and videos, in original format and original resolution.
+>
+> 纯黑银河底、粒子视觉、歌词舞台、视觉控制台、3D 歌单架，再加上 Mineradio 没有的 **MV / 视频原始格式、原始分辨率直通播放**（不转码、不压缩、不裁切）。
+>
+> **English:** A Mineradio-style all-in-one music player for 8 platforms, with an extra cinema mode: MVs and local videos play in their original format and original resolution — no transcoding, no compression, no cropping. Web + desktop (Windows / macOS / Linux) from the same codebase.
+
+**快速入口：** [📥 下载安装包（Releases）](https://github.com/lzx-lgm/all-in-one-player/releases) · [🌐 在线试用网页版](https://muse.ai/s/quan-neng-bo-fang-qi-xnl6xkiaxcekxon/_VvZwdW44EQlcCu--a2vHJ1e36VzWvz-xz2JcREVHho) · [🖥️ 桌面版说明](#桌面软件版electron真同步官网歌单) · [❓ 常见问题](#常见问题faq)
+
+## 一眼看懂
+
+| | 全能播放器 | Mineradio |
+|---|---|---|
+| 音乐平台 | 8 个：汽水、Spotify、Apple Music、YouTube Music、QQ音乐、网易云、酷狗、酷我 | 多平台聚合 |
+| MV / 视频 | ✅ 原始格式、原始分辨率直通，全屏 / 画中画 / 1:1 原生尺寸 | ❌ 只有音乐 |
+| 登录方式 | 官方扫码登录，不碰密码；桌面版内嵌登录窗真同步歌单 | 内嵌登录窗 + 本地凭证 |
+| 网页版 | ✅ 浏览器直接用，可安装为 PWA | 需 Bridge 扩展 |
+| 桌面版 | ✅ Windows / macOS / Linux 安装包 | Windows 为主 |
+| 本地文件 | ✅ 音频 + 视频拖放即播，不上传 | ✅ 本地音频 / 视频 |
 
 网页版与桌面软件版是**同一套代码**：网页版全系统浏览器适配并可安装为 PWA；桌面版用 Electron 封装，Windows / macOS / Linux 三个系统都有安装包，统一发布在本仓库的 [Releases](https://github.com/lzx-lgm/all-in-one-player/releases)。
 
@@ -118,6 +140,29 @@ all-in-one-player/
 | 网页版（浏览器） | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PWA 安装到桌面 | ✅ Chrome/Edge | ✅ Chrome/Edge | ✅ Chrome | ✅ | ✅ 添加到主屏幕 |
 | 软件版安装包 | `.exe` | `.dmg` | `.AppImage` / `.deb` | —（用 PWA） | —（用 PWA） |
+
+## 常见问题 FAQ
+
+**Q：网页版登录后为什么看不到我真正的歌单？**
+A：网页版是静态页面，浏览器不允许它读取其它网站的 Cookie，所以网页版只能作本机标记、列演示曲库。想真同步你的歌单，请用桌面版：它用内嵌官方登录窗扫码登录，凭证只存本机，歌单是真的从官方接口拉回来的。
+
+**Q：QQ 登录的二维码为什么是空白的？**
+A：这是 QQ 音乐官网侧的问题，间歇性出现：QQ 页签第一次打开时扫码区全白、无报错，微信页签一直正常。空白时可以：重开登录窗、先切到微信页签再切回 QQ、刷新页面、或复制链接到浏览器扫码；有时残留会话会直接快捷登录回你的账号。桌面版登录窗停留 12 秒仍无凭证时会自动弹出重试引导。
+
+**Q：用微信扫码登录 QQ 音乐，为什么歌单是空的？**
+A：微信扫码登录的是一个独立身份，和 QQ 号的资产、会员不互通，歌单为空是正常的。请切回「QQ号扫码登录」，那才是你有歌单的那个身份。
+
+**Q：Spotify 的歌为什么放不了？**
+A：Spotify 官方 Web API 本身不提供音频直链（Mineradio 实测结论也一样）。播放器会去其它已登录平台按「歌名 + 艺人 + 时长」自动匹配同一首歌换源，找不到就保留试听并明示，不会假装在放。
+
+**Q：VIP / 会员歌曲能免费听吗？**
+A：不能。本项目不绕过任何平台的版权、会员或付费限制，拿不到可播地址就如实说明原因，再去其它已登录平台匹配同一首歌。
+
+**Q：我的账号密码 / Cookie 会不会被上传？**
+A：不会。播放器从不在本站输入任何平台密码；桌面版凭证只存在你本机用户数据目录（`auth/<平台>-<身份>.json`，0600 权限），永不打印、永不记入日志、永不提交进仓库。
+
+**Q：安装包在哪里下载？**
+A：打上版本标签（如 `v1.0.0`）并推送后，GitHub Actions 会自动在 [Releases](https://github.com/lzx-lgm/all-in-one-player/releases) 发布 Windows `.exe`、macOS `.dmg`、Linux `.AppImage` / `.deb`。
 
 ## License
 
