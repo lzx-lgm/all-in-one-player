@@ -135,9 +135,13 @@ function openLoginWindow(platform, identity) {
     if (h.url.startsWith('http')) { shell.openExternal(h.url); return { action: 'deny' }; }
     return { action: 'allow' };
   });
-  // 网易云：页面加载完 900ms 后自动点一下「登录」，二维码自己弹出来
+  // 网易云：页面加载完 900ms 后自动点一下「登录」，二维码自己弹出来（只点一次，
+  // 避免页面反复加载时每次都点、把登录流程点乱）
   if (platform === 'netease') {
+    let neteaseClicked = false;
     win.webContents.on('did-finish-load', function () {
+      if (neteaseClicked) return;
+      neteaseClicked = true;
       win.webContents.executeJavaScript(
         "setTimeout(function(){var nodes=Array.from(document.querySelectorAll('a, button, span, div'));var n=nodes.find(function(x){var t=(x.textContent||'').trim();if(!/登录|立即登录/.test(t))return false;var r=x.getBoundingClientRect();return r.width>0&&r.height>0});if(n)n.click();},900);",
         true
@@ -150,6 +154,7 @@ function openLoginWindow(platform, identity) {
   let reloads = 0;
   let fallbackUsed = false;
   let failDialogOpen = false;
+  let navTimes = [];
   const offerFallback = async function (reason) {
     if (win.isDestroyed() || failDialogOpen || done) return;
     failDialogOpen = true;
@@ -158,19 +163,26 @@ function openLoginWindow(platform, identity) {
         type: 'warning',
         title: '登录页打不开',
         message: '官方登录页没有正常显示（' + reason + '）。',
-        detail: '可以点「重试」重新加载，或点「在浏览器打开」，用系统浏览器在官方页扫码登录。',
-        buttons: ['重试', '在浏览器打开', '关闭'],
-        defaultId: 0, cancelId: 2
+        detail: '「清除登录数据并重试」会先清掉这个登录窗里存的旧会话（过期的登录态会在几个地址之间来回跳转，就是一直闪的原因），再重新打开登录页。也可以点「在浏览器打开」，用系统浏览器在官方页扫码登录。',
+        buttons: ['重试', '清除登录数据并重试', '在浏览器打开', '关闭'],
+        defaultId: 1, cancelId: 3
       });
       if (r.response === 0) { reloads = 0; try { win.loadURL(url); } catch (e) {} }
-      else if (r.response === 1) { try { await shell.openExternal(url); } catch (e) {} }
+      else if (r.response === 1) {
+        reloads = 0; fallbackUsed = false; navTimes.length = 0;
+        try { await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'caches', 'serviceworkers'] }); } catch (e) {}
+        try { await ses.clearCache(); } catch (e) {}
+        try { win.loadURL(url); } catch (e) {}
+      }
+      else if (r.response === 2) { try { await shell.openExternal(url); } catch (e) {} }
       else { try { win.close(); } catch (e) {} }
     } catch (e) {}
     failDialogOpen = false;
   };
-  win.webContents.on('did-fail-load', async function (_e, code, desc) {
+  win.webContents.on('did-fail-load', async function (_e, code, desc, _validatedUrl, isMainFrame) {
     if (done || win.isDestroyed()) return;
     if (code === -3) return; // 用户主动中止，不算失败
+    if (isMainFrame === false) return; // 子页面（iframe/验证码框）加载失败不重载整页
     // QQ 入口页协议类失败：先清缓存，再回退到 QQ 首页
     if (platform === 'qq' && !fallbackUsed && /HTTP2|PROTOCOL_ERROR|ERR_FAILED/i.test(String(desc || '') + ' ' + code)) {
       fallbackUsed = true;
@@ -241,9 +253,21 @@ function openLoginWindow(platform, identity) {
       warmupWindow.loadURL(QQ_WARMUP_URL).catch(function (e) { console.warn('QQ warmup navigation failed:', e.message); });
     }, 5000);
   };
+  // 循环跳转自救：官方页在过期会话下会在几个地址之间来回跳（白屏↔加载转圈），
+  // 10 秒内跳 6 次以上就停下来弹框，不让它一直闪。
+  const recordNav = function () {
+    if (done || win.isDestroyed()) return;
+    const now = Date.now();
+    navTimes.push(now);
+    while (navTimes.length && navTimes[0] < now - 10000) navTimes.shift();
+    if (navTimes.length > 6) {
+      navTimes.length = 0;
+      offerFallback('页面一直在来回跳转（登录会话可能已过期）');
+    }
+  };
   // 导航到已登录落地页 / 轮询 Cookie：残留会话快捷登录也会被这里捕获
-  win.webContents.on('did-navigate', function () { finish('navigate'); });
-  win.webContents.on('did-navigate-in-page', function () { finish('navigate'); });
+  win.webContents.on('did-navigate', function () { recordNav(); finish('navigate'); });
+  win.webContents.on('did-navigate-in-page', function () { recordNav(); finish('navigate'); });
   const timer = setInterval(async function () {
     if (win.isDestroyed()) { clearInterval(timer); return; }
     const ok = await finish('poll');
