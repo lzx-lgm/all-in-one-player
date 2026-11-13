@@ -12,7 +12,7 @@
     "build:win": "electron-builder --win nsis",
     "build:win:dir": "electron-builder --win dir",
     "build:win:internal-beta": "electron-builder --config electron-builder.internal-beta.json --win nsis --publish never",
-    "build:mac": "electron-builder --mac dmg",
+    "build:mac": "electron-builder --mac dmg --x64 --arm64",
     "build:linux": "electron-builder --linux AppImage deb",
     "check": "node --check server.js && node --check desktop/main.js && node --check desktop/preload.js && node --check kuwo-api.js && node --check ytmusic-api.js && node --check apple-api.js && node --check public/sw.js && node --check public/js/modules/12-cinema/00-cinema-player.js && node --check public/js/modules/13-web/00-pwa-register.js"
   },
