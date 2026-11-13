@@ -223,10 +223,14 @@ function platformMeta(provider) {
   if (provider === 'qishui') return { key: 'qishui', short: 'QS', label: '汽水音乐', app: '汽水音乐 App', dot: 'qishui' };
   if (provider === 'spotify') return { key: 'spotify', short: 'SP', label: 'Spotify', app: 'Spotify', dot: 'spotify' };
   if (provider === 'apple') return { key: 'apple', short: 'AP', label: 'Apple Music', app: 'Apple Music', dot: 'apple' };
+  if (provider === 'kuwo') return { key: 'kuwo', short: 'KW', label: '酷我音乐', app: '酷我音乐 App', dot: 'kuwo' };
+  if (provider === 'ytmusic') return { key: 'ytmusic', short: 'YT', label: 'YouTube Music', app: 'YouTube Music', dot: 'ytmusic' };
   return { key: 'netease', short: 'NE', label: '网易云音乐', app: '网易云音乐 App', dot: 'netease' };
 }
 function platformStatus(provider) {
   if (provider === 'apple') return appleLoginStatus;
+  if (provider === 'kuwo') return kuwoLoginStatus;
+  if (provider === 'ytmusic') return ytmusicLoginStatus;
   if (provider === 'spotify') return spotifyLoginStatus;
   if (provider === 'qishui') return qishuiLoginStatus;
   if (provider === 'kugou') return kugouLoginStatus;
