@@ -55,11 +55,78 @@ function fetchText(url, opts) {
 }
 async function fetchJson(url, cookies, opts) {
   opts = opts || {};
-  const headers = {};
+  const headers = Object.assign({}, opts.headers || {});
   if (cookies) headers.Cookie = cookieHeader(cookies);
-  if (opts.body) headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/x-www-form-urlencoded';
   const r = await fetchText(url, Object.assign({}, opts, { headers: headers }));
   return { status: r.status, json: safeJsonParse(r.body), raw: r.body };
+}
+
+// 按目标站给 Referer（音频代理与音源探测共用）：部分平台会按 Referer 拒掉请求
+function refererForHost(host) {
+  host = String(host || '').toLowerCase();
+  if (host.indexOf('qq.com') >= 0 || host.indexOf('qpic.cn') >= 0) return 'https://y.qq.com/';
+  if (host.indexOf('163.com') >= 0 || host.indexOf('netease') >= 0) return 'https://music.163.com/';
+  if (host.indexOf('kugou.com') >= 0) return 'https://www.kugou.com/';
+  if (host.indexOf('kuwo.cn') >= 0) return 'https://www.kuwo.cn/';
+  if (host.indexOf('qishui.com') >= 0 || host.indexOf('douyin') >= 0 || host.indexOf('byteimg.com') >= 0) return 'https://www.qishui.com/';
+  if (host.indexOf('music.youtube.com') >= 0 || host.indexOf('googlevideo.com') >= 0) return 'https://music.youtube.com/';
+  return '';
+}
+
+// 探测一个可播地址是不是真音频：只取前 8192 字节，看文件头魔数。
+// 原理照 Mineradio：不要把死链交给播放器——死链只会让播放器弹错，
+// 探测通过的才算可播；探测本身连不上时，调用方自行决定是否兜底。
+function audioProbeMagic(buf) {
+  if (!buf || !buf.length) return '';
+  if (buf.length >= 3 && buf.subarray(0, 3).toString('ascii') === 'ID3') return 'mp3-id3';
+  if (buf.length >= 4 && buf.subarray(0, 4).toString('ascii') === 'fLaC') return 'flac';
+  if (buf.length >= 4 && buf.subarray(0, 4).toString('ascii') === 'OggS') return 'ogg';
+  if (buf.length >= 12 && buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WAVE') return 'wave';
+  if (buf.length >= 12 && buf.subarray(4, 8).toString('ascii') === 'ftyp') return 'mp4';
+  const scan = Math.min(buf.length - 1, 2048);
+  for (let i = 0; i < scan; i++) {
+    if (buf[i] === 0xff && (buf[i + 1] & 0xe0) === 0xe0) return 'mpeg-frame';
+  }
+  return '';
+}
+async function probeAudioUrl(audioUrl, timeoutMs) {
+  try {
+    const target = new URL(audioUrl);
+    const referer = refererForHost(target.hostname);
+    const ctrl = new AbortController();
+    const to = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, Math.max(800, timeoutMs || 2000));
+    let resp;
+    try {
+      resp = await fetch(audioUrl, { headers: Object.assign({ 'User-Agent': UA, Range: 'bytes=0-8191' }, referer ? { Referer: referer } : {}), signal: ctrl.signal });
+    } finally { clearTimeout(to); }
+    const status = Number(resp.status) || 0;
+    const contentType = String(resp.headers.get('content-type') || '').toLowerCase();
+    const contentLooksText = /text\/html|application\/(json|xml)|text\/plain/.test(contentType);
+    let sample = Buffer.alloc(0);
+    if (resp.body && (status === 200 || status === 206)) {
+      const reader = resp.body.getReader();
+      const chunks = [];
+      let bytes = 0;
+      try {
+        while (bytes < 8192) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          const buf = Buffer.from(chunk.value || []);
+          if (!buf.length) continue;
+          chunks.push(buf);
+          bytes += buf.length;
+        }
+      } finally { try { await reader.cancel(); } catch (e) {} }
+      sample = chunks.length ? Buffer.concat(chunks, bytes).subarray(0, 8192) : Buffer.alloc(0);
+    } else {
+      try { if (resp.body && typeof resp.body.cancel === 'function') await resp.body.cancel(); } catch (e) {}
+    }
+    const magic = audioProbeMagic(sample);
+    return { ok: (status === 200 || status === 206) && sample.length >= 512 && !contentLooksText && !!magic, status: status, bytes: sample.length, contentType: contentType, magic: magic };
+  } catch (e) {
+    return { ok: false, status: 0, reason: e && e.name === 'AbortError' ? 'timeout' : 'network' };
+  }
 }
 
 // ---------------------------------------------------------------- 平台适配器
@@ -104,18 +171,32 @@ const ADAPTERS = {
       return { ok: true, tracks: songs };
     },
     async audioUrl(cookies, songId) {
-      const r = await fetchJson('https://music.163.com/api/song/enhance/player/url/v1?id=' + encodeURIComponent(songId) + '&level=standard', cookies,
-        { method: 'POST', body: 'ids=[' + songId + ']&level=standard&encodeType=mp3' });
-      const item = r.json && r.json.data && r.json.data[0];
-      if (item && item.url) return { ok: true, url: item.url };
-      if (r.json && r.json.code === 401) return { ok: false, reason: 'login_required' };
+      // 按 Mineradio 的做法：多档音质逐个试，每档都探测是不是真音频；
+      // 试听片段只当兜底，不当作正常可播地址交出去。
+      const levels = ['standard', 'exhigh'];
+      let trialFallback = null;
+      for (let i = 0; i < levels.length; i++) {
+        const level = levels[i];
+        try {
+          const r = await fetchJson('https://music.163.com/api/song/enhance/player/url/v1?id=' + encodeURIComponent(songId) + '&level=' + level, cookies,
+            { method: 'POST', body: 'ids=[' + songId + ']&level=' + level + '&encodeType=mp3' });
+          const item = r.json && r.json.data && r.json.data[0];
+          if (r.json && r.json.code === 401) return { ok: false, reason: 'login_required' };
+          if (!item || !item.url) continue;
+          const probe = await probeAudioUrl(item.url, 2500);
+          if (!probe.ok) continue;
+          if (item.freeTrialInfo) { if (!trialFallback) trialFallback = { ok: true, url: item.url, trial: true, level: level }; continue; }
+          return { ok: true, url: item.url, trial: false, level: level };
+        } catch (e) { /* 这档失败就试下一档 */ }
+      }
+      if (trialFallback) return trialFallback;
       return { ok: false, reason: 'vip_required', detail: '该曲目在网易云需会员或无可播地址' };
     }
   },
   qq: {
-    label: 'QQ音乐', loginUrl: 'https://y.qq.com/',
+    label: 'QQ音乐', loginUrl: 'https://y.qq.com/', // 实际入口在 main.js：个人页 + 首页回退
     domains: ['y.qq.com', '.qq.com', '.y.qq.com'],
-    cookieKeys: ['uin', 'qqmusic_key', 'qm_keyst', 'qm_keyst'],
+    cookieKeys: ['uin', 'qqmusic_key', 'qm_keyst'],
     requiredKeys: ['uin'],
     // QQ 登录页签二维码间歇性空白：这不是本应用能修的官网问题。
     // 桌面版登录窗内遇到空白时，渲染层按「重试 / 先切微信页签再切回 / 刷新 / 复制链接到浏览器」引导；
@@ -130,11 +211,23 @@ const ADAPTERS = {
       const playlists = mydiss.map(function (d) {
         return { id: String(d.dissid || d.id), name: d.dissname || d.name, trackCount: d.song_cnt || d.songnum || 0, subscribed: false, creator: '', specialType: 0 };
       });
-      // 「我喜欢」在 QQ 是 dissid 为 0 附近的特殊歌单；若 profile 未给，单独取喜欢列表
-      let liked = playlists.find(function (p) { return /喜欢/.test(p.name); }) || null;
+      // 「我喜欢」是 dirid 201 的特殊歌单（Mineradio 的做法），不在 profile 的 mydiss 里也照常给一张卡；
+      // 点开它走 playlistTracks('liked') 单独取。
+      if (!playlists.some(function (p) { return /喜欢/.test(p.name); })) {
+        playlists.unshift({ id: 'liked', name: '我喜欢', trackCount: 0, subscribed: false, creator: '', specialType: 5 });
+      }
+      const liked = playlists.find(function (p) { return /喜欢/.test(p.name); }) || null;
       return { ok: true, uid: uin, playlists: playlists, likedPlaylistId: liked ? liked.id : null, note: 'QQ 的「我喜欢」与自建歌单以 profile 页返回为准；微信身份的资产与 QQ 号不互通' };
     },
     async playlistTracks(cookies, playlistId) {
+      // 「我喜欢」走专用接口：music.srfDissInfo.DissInfo / CgiGetDiss，dirid 201
+      if (String(playlistId) === 'liked') {
+        const body = JSON.stringify({ comm: { ct: 24, cv: 0 }, req_0: { module: 'music.srfDissInfo.DissInfo', method: 'CgiGetDiss', param: { disstid: 0, dirid: 201, tag: 1, song_begin: 0, song_num: 100, userinfo: 1, orderlist: 1 } } });
+        const r = await fetchJson('https://u.y.qq.com/cgi-bin/musicu.fcg', cookies,
+          { method: 'POST', body: body, headers: { 'Content-Type': 'application/json' }, referer: 'https://y.qq.com/' });
+        const list = (r.json && r.json.req_0 && r.json.req_0.data && r.json.req_0.data.songlist) || [];
+        return { ok: true, tracks: list.map(function (s) { return { id: String(s.songmid || s.songid), title: s.songname, artist: (s.singer || []).map(function (a) { return a.name; }).join(' / '), durationMs: (s.interval || 0) * 1000, album: s.albumname || '' }; }) };
+      }
       const uin = String(cookies.uin || '').replace(/^o0*/, '');
       const body = JSON.stringify({ comm: { ct: 24, cv: 0 }, cdlist: { module: 'CDInfo', method: 'getUCCdInfo', param: { disstid: Number(playlistId) || 0, onlysonglist: true, song_begin: 0, song_num: 100 } } });
       const r = await fetchJson('https://u.y.qq.com/cgi-bin/musicu.fcg', cookies,
@@ -143,16 +236,46 @@ const ADAPTERS = {
       return { ok: true, tracks: list.map(function (s) { return { id: String(s.songmid || s.songid), title: s.songname, artist: (s.singer || []).map(function (a) { return a.name; }).join(' / '), durationMs: (s.interval || 0) * 1000, album: s.albumname || '' }; }) };
     },
     async audioUrl(cookies, songmid) {
+      // 按 Mineradio 的做法重写：
+      //  1. guid 每次随机（固定 guid 会被认成未登录）；
+      //  2. 有播放凭证（qqmusic_key / qm_keyst）时 comm.ct=19 并带上 authst，
+      //     没有才用 ct=24——不带 authst 的请求在 QQ 那边就是游客，只能拿试听；
+      //  3. 一次要多档音质的文件名（无损/320k/128k/AAC），逐个探测；
+      //  4. 只返回探测通过（真是音频文件头）的地址，死链不交出去。
       const uin = String(cookies.uin || '').replace(/^o0*/, '');
+      const musicKey = cookies.qm_keyst || cookies.qqmusic_key || '';
+      const guid = String(10000000 + Math.floor(Math.random() * 90000000));
+      const QUALITY = [
+        { prefix: 'F000', ext: '.flac' }, { prefix: 'M800', ext: '.mp3' },
+        { prefix: 'M500', ext: '.mp3' }, { prefix: 'C400', ext: '.m4a' }
+      ];
+      const filenames = QUALITY.map(function (q) { return q.prefix + songmid + q.ext; });
+      const comm = { uin: uin, format: 'json', ct: musicKey ? 19 : 24, cv: 0 };
+      if (musicKey) comm.authst = musicKey;
       const body = JSON.stringify({
-        comm: { uin: uin, format: 'json', ct: 24, cv: 0 },
-        req_0: { module: 'vkey.GetVkeyServer', method: 'CgiGetVkey', param: { guid: '10000', songmid: [songmid], songtype: [0], uin: uin, loginflag: 1, platform: '20' } }
+        comm: comm,
+        req_0: { module: 'vkey.GetVkeyServer', method: 'CgiGetVkey', param: { guid: guid, songmid: filenames.map(function () { return songmid; }), songtype: filenames.map(function () { return 0; }), uin: uin, loginflag: 1, platform: '20', filename: filenames } }
       });
       const r = await fetchJson('https://u.y.qq.com/cgi-bin/musicu.fcg?g_tk=0&loginUin=' + encodeURIComponent(uin), cookies,
-        { method: 'POST', body: body, headers: { 'Content-Type': 'application/json' } });
-      const purl = r.json && r.json.req_0 && r.json.req_0.data && r.json.req_0.data.midurlinfo && r.json.req_0.data.midurlinfo[0] && r.json.req_0.data.midurlinfo[0].purl;
-      const sip = r.json && r.json.req_0 && r.json.req_0.data && r.json.req_0.data.sip && r.json.req_0.data.sip[0];
-      if (purl) return { ok: true, url: (sip || 'https://ws.stream.qqmusic.qq.com/') + purl };
+        { method: 'POST', body: body, headers: { 'Content-Type': 'application/json' }, referer: 'https://y.qq.com/' });
+      const data = r.json && r.json.req_0 && r.json.req_0.data;
+      const infos = (data && Array.isArray(data.midurlinfo)) ? data.midurlinfo : [];
+      const sips = (data && Array.isArray(data.sip) && data.sip.length ? data.sip : ['https://ws.stream.qqmusic.qq.com/']).filter(Boolean);
+      const withPurl = infos.filter(function (it) { return it && it.purl; });
+      let networkUnreachable = true;
+      for (let i = 0; i < withPurl.length; i++) {
+        for (let j = 0; j < sips.length; j++) {
+          const candidate = String(sips[j] || '') + String(withPurl[i].purl || '');
+          const probe = await probeAudioUrl(candidate, 2000);
+          if (probe.status !== 0) networkUnreachable = false;
+          if (probe.ok) return { ok: true, url: candidate, level: withPurl[i].filename || '', trial: false };
+        }
+      }
+      if (withPurl.length && networkUnreachable) {
+        // 探测本身连不上（比如本机网络问题），退回第一个地址让播放器自己试，
+        // 不直接判死刑；播放器播不出来会按原有逻辑提示并换源。
+        return { ok: true, url: String(sips[0] || 'https://ws.stream.qqmusic.qq.com/') + String(withPurl[0].purl || ''), level: withPurl[0].filename || '', trial: false, probeSkipped: true };
+      }
       return { ok: false, reason: 'vip_required', detail: '该曲目在 QQ音乐 需会员或无可播地址，可换源到其它已登录平台' };
     }
   },
@@ -312,13 +435,7 @@ function createServer(rootDir, authDir) {
           res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('Bad url'); return;
         }
         const host = target.hostname.toLowerCase();
-        let referer = '';
-        if (host.indexOf('qq.com') >= 0 || host.indexOf('qpic.cn') >= 0) referer = 'https://y.qq.com/';
-        else if (host.indexOf('163.com') >= 0 || host.indexOf('netease') >= 0) referer = 'https://music.163.com/';
-        else if (host.indexOf('kugou.com') >= 0) referer = 'https://www.kugou.com/';
-        else if (host.indexOf('kuwo.cn') >= 0) referer = 'https://www.kuwo.cn/';
-        else if (host.indexOf('qishui.com') >= 0 || host.indexOf('douyin') >= 0 || host.indexOf('byteimg.com') >= 0) referer = 'https://www.qishui.com/';
-        else if (host.indexOf('music.youtube.com') >= 0 || host.indexOf('googlevideo.com') >= 0) referer = 'https://music.youtube.com/';
+        const referer = refererForHost(host);
         const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' };
         if (referer) headers.Referer = referer;
         if (req.headers.range) headers.Range = req.headers.range;
