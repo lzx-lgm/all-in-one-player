@@ -75,9 +75,15 @@ function openLoginWindow(platform, identity) {
   identity = identity || (platform === 'qq' ? 'qq' : 'default');
   const url = LOGIN_URLS[platform] || 'https://music.163.com/';
   const ses = session.fromPartition(partitionFor(platform, identity));
+  // 关键修复：QQ/网易云等官网会按 User-Agent 下发页面，Electron 默认 UA
+  // （含 Electron/xx 字样）可能拿到空白壳页面。登录窗改用标准 Chrome UA。
+  try {
+    ses.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36');
+  } catch (e) {}
   const win = new BrowserWindow({
     width: 520, height: 680, title: '登录 · ' + (serverMod.ADAPTERS[platform] ? serverMod.ADAPTERS[platform].label : platform),
     parent: mainWin || undefined, modal: false,
+    backgroundColor: '#0a0a0f',
     webPreferences: { partition: partitionFor(platform, identity), contextIsolation: true, nodeIntegration: false }
   });
   win.setMenuBarVisibility(false);
@@ -86,6 +92,40 @@ function openLoginWindow(platform, identity) {
   win.webContents.setWindowOpenHandler(function (h) {
     if (h.url.startsWith('http')) { shell.openExternal(h.url); return { action: 'deny' }; }
     return { action: 'allow' };
+  });
+  // 登录窗空白/崩溃自救：页面加载失败或渲染进程崩溃时，先自动重载一次，
+  // 还不行就弹原生对话框，给「在浏览器打开」兜底（浏览器里扫码同样能登录，
+  // 凭证仍只存在官方页与本机）。
+  let reloads = 0;
+  let failDialogOpen = false;
+  const offerFallback = async function (reason) {
+    if (win.isDestroyed() || failDialogOpen || done) return;
+    failDialogOpen = true;
+    try {
+      const r = await dialog.showMessageBox(win, {
+        type: 'warning',
+        title: '登录页打不开',
+        message: '官方登录页没有正常显示（' + reason + '）。',
+        detail: '可以点「重试」重新加载，或点「在浏览器打开」，用系统浏览器在官方页扫码登录。',
+        buttons: ['重试', '在浏览器打开', '关闭'],
+        defaultId: 0, cancelId: 2
+      });
+      if (r.response === 0) { reloads = 0; try { win.loadURL(url); } catch (e) {} }
+      else if (r.response === 1) { try { await shell.openExternal(url); } catch (e) {} }
+      else { try { win.close(); } catch (e) {} }
+    } catch (e) {}
+    failDialogOpen = false;
+  };
+  win.webContents.on('did-fail-load', function (_e, code, desc) {
+    if (done || win.isDestroyed()) return;
+    if (code === -3) return; // 用户主动中止，不算失败
+    if (reloads < 1) { reloads++; try { win.loadURL(url); } catch (e) {} return; }
+    offerFallback('加载失败 ' + code + ' ' + desc);
+  });
+  win.webContents.on('render-process-gone', function (_e, details) {
+    if (done || win.isDestroyed()) return;
+    if (reloads < 1) { reloads++; try { win.reload(); } catch (e) {} return; }
+    offerFallback('页面崩溃 ' + (details && details.reason ? details.reason : ''));
   });
 
   let done = false;
