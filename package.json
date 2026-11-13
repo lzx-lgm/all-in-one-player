@@ -1,6 +1,6 @@
 {
   "name": "all-in-one-player",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "private": false,
   "description": "全能播放器 OmniRadio+：Mineradio 式沉浸视觉舞台 + 8 平台聚合音乐，独有 MV/视频原始格式、原始分辨率直通播放。网页版（PWA）与 Electron 桌面版同一套代码。",
   "homepage": "https://github.com/lzx-lgm/all-in-one-player",
@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/lzx-lgm/all-in-one-player.git"
   },
-  "license": "MIT",
+  "license": "GPL-3.0",
   "author": "lzx-lgm <2221278893@qq.com>",
   "main": "electron/main.js",
   "scripts": {

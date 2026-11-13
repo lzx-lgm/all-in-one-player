@@ -1,10 +1,10 @@
 # All-in-One Player · 全能播放器 OmniRadio+
 
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)
 ![Platform: Web](https://img.shields.io/badge/Web-PWA-blue.svg)
 ![Platform: Desktop](https://img.shields.io/badge/Desktop-Windows%20%7C%20macOS%20%7C%20Linux-9cf.svg)
 ![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)
-![Version](https://img.shields.io/badge/Version-1.0.8-orange.svg)
+![Version](https://img.shields.io/badge/Version-1.0.9-orange.svg)
 
 > **一句话：像 Mineradio，但多了一个影院。**
 > One player for all your music — plus a cinema for MVs and videos, in original format and original resolution.
@@ -166,4 +166,4 @@ A：打上版本标签（如 `v1.0.0`）并推送后，GitHub Actions 会自动�
 
 ## License
 
-MIT © lzx-lgm。各音乐平台名称、曲库与内容版权归各自平台与权利方所有；本项目与各平台无隶属关系。
+GPL-3.0 © lzx-lgm。本项目基于 [Mineradio](https://github.com/XxHuberrr/Mineradio-paused)（GPL-3.0）升级而来：取歌地址、登录暖机、音频代理等机制参考并沿用了 Mineradio 的实现，并在此基础上增加了 8 平台整合与 PotPlayer 式视频播放（字幕 / 音轨 / A-B 循环 / 逐帧 / 画面调节 / 截图 / 媒体信息 / 外部播放器兜底）。按 GPL-3.0，衍生作品同样以 GPL-3.0 开源。各音乐平台名称、曲库与内容版权归各自平台与权利方所有；本项目与各平台无隶属关系。

@@ -305,9 +305,20 @@
         <select id="vidSpeedSel" class="speed-sel" title="视频倍速"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1.0× 倍速</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option></select>
         <span id="qualitySel" class="tbtn" style="cursor:default;display:inline-flex;align-items:center" title="画质信息（片源只有原始一档，不做假切换）">画质 · 原始（源文件）</span>
       </div>
+      <!-- PotPlayer 式专业控制：字幕 / 音轨 / A-B 循环 / 逐帧 / 画面调节 / 截图 / 媒体信息 / 外部播放器 -->
+      <div class="pro-row" id="videoProRow">
+        <span class="pro-group"><b>字幕</b><button class="tbtn" id="subBtn">加载字幕文件</button><input type="file" id="subFile" accept=".srt,.vtt,.ass,.ssa" class="hidden"><span id="subState" class="pro-note">未加载</span></span>
+        <span class="pro-group"><b>音轨</b><select id="audioTrackSel" class="speed-sel" title="多音轨视频切换音轨"><option value="">单音轨</option></select></span>
+        <span class="pro-group"><b>A-B 循环</b><button class="tbtn" id="abABtn">设 A 点</button><button class="tbtn" id="abBBtn">设 B 点</button><button class="tbtn" id="abClearBtn">取消</button><span id="abState" class="pro-note"></span></span>
+        <span class="pro-group"><b>逐帧</b><button class="tbtn" id="frameBackBtn">◀ 帧</button><button class="tbtn" id="frameFwdBtn">帧 ▶</button></span>
+        <span class="pro-group"><label class="pro-check"><input type="checkbox" id="pitchCheck" checked> 变速保音调</label></span>
+        <span class="pro-group"><b>画面</b><label>亮度 <input type="range" id="fltBright" min="50" max="150" value="100"></label><label>对比 <input type="range" id="fltContrast" min="50" max="150" value="100"></label><label>饱和 <input type="range" id="fltSaturate" min="0" max="200" value="100"></label><button class="tbtn" id="fltResetBtn">还原</button></span>
+        <span class="pro-group"><button class="tbtn" id="shotBtn">📷 截图</button><button class="tbtn" id="mediaInfoBtn">媒体信息</button><button class="tbtn" id="openExtBtn" style="display:none">用系统播放器打开</button></span>
+      </div>
+      <div id="mediaInfoPanel" class="hidden" style="margin:10px 4px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:12.5px;line-height:1.8;color:var(--muted);white-space:pre-wrap"></div>
       <div class="dropzone" id="dropZone">
         <b>把你自己的视频拖到这里，直接原画播放</b>
-        <p>MP4 / WebM / MOV / MKV / AVI 等文件在本机浏览器里直接解码播放——不上传、不转码、不缩放源文件，分辨率与格式保持原始状态。<br>浏览器原生解码不了的少数格式（如部分 MKV / AVI 编码），用下方桌面软件版（Electron + 完整解码）打开即可。</p>
+        <p>MP4 / WebM / MOV / MKV / AVI 等文件在本机浏览器里直接解码播放——不上传、不转码、不缩放源文件，分辨率与格式保持原始状态。<br>浏览器原生解码不了的少数格式（如部分 MKV / AVI 编码，或 AC3 / DTS 音轨），桌面版可点「用系统播放器打开」（装了 PotPlayer 就是它，外置 FFmpeg 解码什么都能播），或换 MP4(H.264) / WebM 文件。</p>
         <button class="pick" id="pickFileBtn">选择本地视频 / 音频文件</button>
         <input type="file" id="localFile" accept="video/*,audio/*,.mkv,.avi,.mov,.webm,.m4v,.mp4" class="hidden">
         <p id="localMeta" style="margin-top:10px;color:var(--gold)"></p>
