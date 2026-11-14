@@ -148,6 +148,17 @@
         if (typeof audio !== 'undefined' && audio && !audio.paused) audio.pause();
       } catch (e) {}
     }
+    /* 视频跟音乐走同一个输出设备：音乐经 setSinkId 选了输出口，视频默认只走系统默认口，
+       两边设备不一致时就会出现“音乐有声、视频没声”。这里让视频每次加载/播放都跟随同一选择。 */
+    function applyCinemaOutputDevice() {
+      try {
+        if (video && typeof video.setSinkId === 'function') {
+          var id = (typeof audioOutputDeviceId !== 'undefined') ? (audioOutputDeviceId || '') : '';
+          var p = video.setSinkId(id);
+          if (p && p.catch) p.catch(function () {});
+        }
+      } catch (e) {}
+    }
     function resetVideoPro() {
       abA = null; abB = null;
       $('cinAbState').textContent = '';
@@ -182,6 +193,7 @@
       $('cinOpenExtBtn').classList.add('cin-hidden');
       resetVideoPro();
       video.muted = false;
+      applyCinemaOutputDevice();
       video.src = proxiedVideoUrl(mv.src);
       $('cinTitle').textContent = mv.title + ' — ' + mv.artist;
       $('cinMetaFmt').textContent = extOf(mv.src);
@@ -203,6 +215,7 @@
       $('cinOpenExtBtn').classList.toggle('cin-hidden', !(IS_DESKTOP && currentLocalFilePath));
       resetVideoPro();
       video.muted = false;
+      applyCinemaOutputDevice();
       video.src = localVideoURL;
       $('cinTitle').textContent = f.name + ' — 本地视频';
       $('cinMetaFmt').textContent = ext;
@@ -232,6 +245,7 @@
     video.addEventListener('play', function () {
       $('cinPlayBtn').textContent = '⏸ 暂停';
       pauseHostAudio();
+      applyCinemaOutputDevice();
       if (video.currentSrc !== videoAudioCheckedSrc) checkVideoAudio();
     });
     video.addEventListener('pause', function () { $('cinPlayBtn').textContent = '▶ 播放'; });
