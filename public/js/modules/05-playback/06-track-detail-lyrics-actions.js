@@ -1473,11 +1473,11 @@ function renderCollectModal() {
   var localRows = (builtInPlaylists || []).map(function (pl) {
     var thumb = pl.cover ? coverUrlWithSize(pl.cover, 80) : '';
     return '<div class="collect-item" data-collect-key="builtin:' + escHtml(String(pl.id || '')) + '" onclick="addCollectTargetToBuiltInPlaylist(this.getAttribute(\'data-built-in-pid\'))" data-built-in-pid="' + escHtml(String(pl.id || '')) + '">' +
-      (thumb ? '<img src="' + thumb + '" alt="">' : '<div class="cover-placeholder built-in">MR</div>') +
+      (thumb ? '<img src="' + thumb + '" alt="">' : '<div class="cover-placeholder built-in">全能</div>') +
       '<div style="min-width:0"><div class="collect-title">' + escHtml(pl.name || '') + '</div><div class="collect-sub">' + (pl.trackCount || 0) + ' 首 · 可混合全部平台</div></div>' +
       '</div>';
   }).join('');
-  var html = '<div class="collect-section-title"><span>Mineradio 内置歌单</span><small>保存在本机，不受平台账号限制</small></div>' +
+  var html = '<div class="collect-section-title"><span>全能播放器内置歌单</span><small>保存在本机，不受平台账号限制</small></div>' +
     (localRows || '<div class="collect-empty compact">还没有内置歌单，在上方输入名称即可创建</div>');
   var canWritePlatform = !!(adapter && adapter.collect && adapter.playlistAddUrl && isSongAccountLoggedIn(provider));
   if (canWritePlatform) {
