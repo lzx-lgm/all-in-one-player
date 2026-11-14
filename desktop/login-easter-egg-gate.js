@@ -4,9 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const LOGIN_EASTER_EGG_GATE_VERSION = 'world-peace-v1';
+const LOGIN_EASTER_EGG_GATE_VERSION = 'all-in-one-v1';
 const LOGIN_EASTER_EGG_STATE_FILE = 'login-easter-egg.json';
-const LOGIN_EASTER_EGG_PASSWORD = '世界和平';
+const LOGIN_EASTER_EGG_PASSWORD = '健康喜乐';
 const LOGIN_EASTER_EGG_CREDENTIAL_FILES = [
   '.cookie',
   '.qq-cookie',
@@ -111,56 +111,39 @@ class LoginEasterEggGate {
     this.clearCredentialFiles();
   }
 
-  async initialize(clearProviderSessions) {
+  async initialize(_clearProviderSessions) {
     this.state = this.readState();
+    // Fork (v2.0.1): the gate is a UI lock only. Never delete saved login
+    // cookies on startup — a gate-version change only asks the user to
+    // re-enter the new phrase; their QQ / NetEase sessions stay intact.
     if (
       this.state.gateVersion === LOGIN_EASTER_EGG_GATE_VERSION &&
       this.state.cookieResetVersion === LOGIN_EASTER_EGG_GATE_VERSION &&
       this.state.resetComplete
     ) {
-      if (!this.state.unlocked) {
-        try {
-          await this.clearCredentialState(clearProviderSessions);
-        } catch (error) {
-          const resetError = String(error && error.message || error || 'LOGIN_SESSION_RESET_FAILED');
-          try {
-            this.writeState({ cookieResetVersion: '', resetComplete: false, resetError });
-          } catch (_) {
-            this.state = Object.assign({}, this.state, { cookieResetVersion: '', resetComplete: false, resetError });
-          }
-          return Object.assign({ resetPerformed: false, error: resetError }, this.publicStatus());
-        }
-      }
       return Object.assign({ resetPerformed: false }, this.publicStatus());
-    }
-
-    let resetError = '';
-    try {
-      await this.clearCredentialState(clearProviderSessions);
-    } catch (error) {
-      resetError = String(error && error.message || error || 'LOGIN_SESSION_RESET_FAILED');
     }
 
     const nextState = {
       gateVersion: LOGIN_EASTER_EGG_GATE_VERSION,
-      cookieResetVersion: resetError ? '' : LOGIN_EASTER_EGG_GATE_VERSION,
-      resetComplete: !resetError,
+      cookieResetVersion: LOGIN_EASTER_EGG_GATE_VERSION,
+      resetComplete: true,
       unlocked: false,
       resetAt: this.now(),
       unlockedAt: 0,
-      resetError,
+      resetError: '',
     };
     try {
       this.writeState(nextState);
     } catch (error) {
-      resetError = `LOGIN_EASTER_EGG_STATE_WRITE_FAILED:${error.message}`;
+      const resetError = `LOGIN_EASTER_EGG_STATE_WRITE_FAILED:${error.message}`;
       this.state = Object.assign({}, this.state, nextState, {
         cookieResetVersion: '',
         resetComplete: false,
         resetError,
       });
     }
-    return Object.assign({ resetPerformed: true, error: resetError || '' }, this.publicStatus());
+    return Object.assign({ resetPerformed: true, error: '' }, this.publicStatus());
   }
 
   async resetForReplay(clearProviderSessions) {
