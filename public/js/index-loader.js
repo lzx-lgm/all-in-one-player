@@ -118,7 +118,7 @@
     request.send(null);
 
     if ((request.status < 200 || request.status >= 300) && request.status !== 0) {
-      throw new Error('Failed to load Mineradio module: ' + path + ' (' + request.status + ')');
+      throw new Error('Failed to load 全能播放器 module: ' + path + ' (' + request.status + ')');
     }
 
     return request.responseText;
