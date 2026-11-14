@@ -928,6 +928,14 @@ function setAudioOutputDevice(deviceId, showNotice) {
   saveAudioOutputMirrorPreference();
   saveAudioOutputDevicePreference();
   renderAudioOutputDeviceUi();
+  /* 影院视频也要跟随同一输出选择，否则音乐走已选设备、视频走系统默认口，两边会不一致 */
+  try {
+    var cinVideoEl = document.getElementById('cinVideo');
+    if (cinVideoEl && typeof cinVideoEl.setSinkId === 'function') {
+      var cinSink = cinVideoEl.setSinkId(audioOutputDeviceId || '');
+      if (cinSink && cinSink.catch) cinSink.catch(function () {});
+    }
+  } catch (e) {}
   Promise.resolve(applyAudioOutputDevice(audio)).then(function (ok) {
     if (!showNotice) return;
     if (!requestedDeviceId) showToast('已切回系统默认输出');
