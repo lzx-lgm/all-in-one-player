@@ -4,7 +4,7 @@ function normalizeBuiltInPlaylistRows(rows) {
       provider: 'mineradio',
       source: 'mineradio',
       builtin: true,
-      creator: playlist.creator || 'Mineradio',
+      creator: playlist.creator || '全能播放器',
       shelfPane: 'mine',
       subscribed: false
     });
@@ -91,7 +91,7 @@ async function createBuiltInPlaylist(name, initialTrack) {
 }
 
 function promptCreateBuiltInPlaylist() {
-  var name = window.prompt('新建 Mineradio 内置歌单', '我的歌单');
+  var name = window.prompt('新建全能播放器内置歌单', '我的歌单');
   if (name == null) return;
   createBuiltInPlaylist(name).catch(function (error) {
     console.warn('[BuiltInPlaylistCreate]', error);

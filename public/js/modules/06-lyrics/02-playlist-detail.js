@@ -126,7 +126,7 @@ function playlistProviderLabel(provider) {
 }
 function playlistProviderName(provider) {
   provider = normalizePlaylistProvider(provider);
-  if (provider === 'mineradio') return 'Mineradio 内置歌单';
+  if (provider === 'mineradio') return '全能播放器内置歌单';
   if (provider === 'spotify') return 'Spotify';
   return provider === 'qq' ? 'QQ 音乐' : (provider === 'kugou' ? '酷狗音乐' : (provider === 'qishui' ? '汽水音乐' : '网易云音乐'));
 }
@@ -658,7 +658,7 @@ function renderUserPlaylistsList(opts) {
     var provider = normalizePlaylistProvider(pl.provider);
     var providerLabel = playlistProviderLabel(provider);
     var thumb = pl.cover ? (provider === 'netease' ? (pl.cover + '?param=88y88') : pl.cover) : '';
-    var imgTag = thumb ? '<img src="' + thumb + '" alt="" loading="lazy" decoding="async" onerror="this.style.opacity=0.2">' : (provider === 'mineradio' ? '<div class="pl-built-in-placeholder">MR</div>' : '<div style="width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,.06);flex-shrink:0"></div>');
+    var imgTag = thumb ? '<img src="' + thumb + '" alt="" loading="lazy" decoding="async" onerror="this.style.opacity=0.2">' : (provider === 'mineradio' ? '<div class="pl-built-in-placeholder">全能</div>' : '<div style="width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,.06);flex-shrink:0"></div>');
     var key = playlistPanelKey(provider, pl.id);
     var isExpanded = playlistPanelDetailState.key === key;
     var expanded = isExpanded ? ' expanded' : '';
