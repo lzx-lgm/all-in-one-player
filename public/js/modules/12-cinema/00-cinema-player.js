@@ -58,7 +58,7 @@
     var style = el('style');
     style.textContent = [
       '.cin-btn{position:fixed;right:18px;bottom:18px;z-index:9990;padding:10px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:rgba(10,10,20,.85);color:#fff;font-size:14px;cursor:pointer;backdrop-filter:blur(8px)}',
-      '.cin-btn:hover{background:rgba(60,60,120,.9)}',
+      '.cin-btn:hover{background:linear-gradient(135deg,#7c3aed,#06b6d4)}',
       '.cin-overlay{position:fixed;inset:0;z-index:9991;background:rgba(0,0,0,.82);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px}',
       '.cin-panel{width:min(1060px,96vw);background:#0d0d16;border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:16px;color:#eee;font-size:14px}',
       '.cin-panel h2{margin:0 0 4px;font-size:17px}',
@@ -70,7 +70,7 @@
       '.cin-chip b{color:#fff}',
       '.cin-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}',
       '.cin-tbtn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}',
-      '.cin-tbtn.on{background:#5b5bd6;border-color:#7a7af0}',
+      '.cin-tbtn.on{background:#7c3aed;border-color:#22d3ee}',
       '.cin-pro{display:flex;gap:14px;flex-wrap:wrap;align-items:center;border-top:1px solid rgba(255,255,255,.12);padding-top:10px;margin-top:10px;font-size:13px}',
       '.cin-pro b{color:#fff}',
       '.cin-note{color:#9a9ab0;font-size:12px}',
@@ -99,7 +99,7 @@
     panel.innerHTML =
       '<button class="cin-close" id="cinClose">✕ 关闭</button>' +
       '<h2>MV / 视频影院</h2>' +
-      '<div class="cin-sub">原格式 · 原分辨率 · 不转码 — Mineradio 没有的一块。本地视频只在本机播放，不上传。</div>' +
+      '<div class="cin-sub">原格式 · 原分辨率 · 不转码 — 全能播放器独有。本地视频只在本机播放，不上传。</div>' +
       '<div class="cin-screen"><video id="cinVideo" controls playsinline preload="metadata"></video></div>' +
       '<div class="cin-meta">' +
       '<span class="cin-chip">原始分辨率 <b id="cinMetaRes">—</b></span>' +
