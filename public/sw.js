@@ -7,7 +7,7 @@
    - index-loader.js 每次加载都带时间戳参数，天然绕过缓存，不怕旧模块。 */
 'use strict';
 
-const CACHE_NAME = 'all-in-one-player-v2.0.0';
+const CACHE_NAME = 'all-in-one-player-v2.0.1';
 const CORE_SHELL = [
   '/',
   '/manifest.webmanifest',
