@@ -1,13 +1,9 @@
 # 全能播放器
 
-像 Mineradio，但多了一个影院：八大音乐平台 + MV / 视频影院，全能音乐 + 视频播放器。
+八大音乐平台 + MV / 视频影院，一个播放器全搞定。
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#)
-
-> 基于 [Mineradio](https://github.com/XxHuberrr/Mineradio-paused)（GPL-3.0）二次开发。
-> Mineradio 本身已长期停更；本项目在它的基础上加了 3 个新平台、MV / 视频影院和网页版，
-> 并修了登录与播放链路。
 
 ## 能做什么
 
@@ -17,7 +13,7 @@
   字幕、换音轨、A-B 循环、逐帧、变速保音调、亮度 / 对比 / 饱和、截图、媒体信息；
   浏览器播不了的编码（AC3 / DTS 没声那种），桌面版可以直接扔给系统播放器（装了 PotPlayer 就是它）。
 - **网页版 + PWA**：浏览器打开就能用，可安装到桌面；桌面版功能更全（登录同步、本地文件、系统播放器）。
-- **歌词舞台 / 频谱 / 视觉控制台**：Mineradio 的视觉系统完整保留。
+- **歌词舞台 / 频谱 / 视觉控制台**：3D 歌词舞台、实时频谱、视觉控制台，九套预设随手换。
 
 ## 各平台同步情况（实话）
 
@@ -65,6 +61,4 @@ npm run build:linux  # Linux 安装包
 
 ## 许可证
 
-GPL-3.0。详见 [LICENSE](LICENSE)。
-本项目基于 Mineradio（GPL-3.0）二次开发：登录窗口代码抄自 Mineradio 的 `desktop/main.js`，
-QQ / 网易云的播放地址解析借鉴了它的原理（代码重写）；其余新增代码同样遵循 GPL-3.0。
+GPL-3.0。详见 [LICENSE](LICENSE)。部分代码源自同协议开源项目，修改后同样遵循 GPL-3.0。
