@@ -251,10 +251,10 @@ function loginEasterEggVisibleValue(inputType) {
   var chars = normalizeLoginEasterEggCharacters(input ? input.value : '');
   if (!loginEasterEggState.prefixLocked) return chars.join('');
   var suffix;
-  if (chars[0] === '世' && chars[1] === '界') suffix = chars.slice(2, 4);
+  if (chars[0] === '健' && chars[1] === '康') suffix = chars.slice(2, 4);
   else if (/^delete/.test(String(inputType || '')) && chars.length < 2) suffix = [];
   else suffix = chars.slice(-2);
-  return '世界' + suffix.join('');
+  return '健康' + suffix.join('');
 }
 
 function renderLoginEasterEggCells(value) {
@@ -287,7 +287,7 @@ function setLoginEasterEggStatus(message, mode) {
 function resetLoginEasterEggInputAfterError() {
   var input = document.getElementById('login-easter-egg-input');
   if (!input) return;
-  input.value = loginEasterEggState.prefixLocked ? '世界' : '';
+  input.value = loginEasterEggState.prefixLocked ? '健康' : '';
   renderLoginEasterEggCells(input.value);
   loginEasterEggState.validating = false;
   focusLoginEasterEggInput();
@@ -298,7 +298,7 @@ async function requestLoginEasterEggUnlock(value) {
   if (api && typeof api.unlockLoginEasterEgg === 'function') {
     return api.unlockLoginEasterEgg(value);
   }
-  var previewPassword = ['世', '界', '和', '平'].join('');
+  var previewPassword = ['健', '康', '喜', '乐'].join('');
   if (value !== previewPassword) return { ok: false, unlocked: false, error: 'LOGIN_EASTER_EGG_INVALID' };
   try { localStorage.setItem(LOGIN_EASTER_EGG_BROWSER_PREVIEW_KEY, '1'); } catch (_) { }
   return { ok: true, unlocked: true, browserPreview: true };
