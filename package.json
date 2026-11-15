@@ -1,8 +1,8 @@
 {
   "name": "all-in-one-player",
   "productName": "全能播放器",
-  "version": "2.0.6",
-  "description": "全能音乐+视频播放器：八大音乐平台 + MV/视频影院，基于 Mineradio（GPL-3.0）二次开发。",
+  "version": "2.0.7",
+  "description": "全能音乐+视频播放器：八大音乐平台 + MV/视频影院。",
   "author": "lzx-lgm <2221278893@qq.com>",
   "license": "GPL-3.0-only",
   "main": "desktop/main.js",
@@ -115,8 +115,8 @@
   "mineradio": {
     "update": {
       "provider": "github",
-      "owner": "XxHuberrr",
-      "repo": "Mineradio",
+      "owner": "lzx-lgm",
+      "repo": "all-in-one-player",
       "preview": false,
       "preferMirrors": true,
       "mirrors": [

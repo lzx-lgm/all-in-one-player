@@ -444,7 +444,7 @@ function serveStatic(req, res, filePath) {
       'Accept-Ranges': 'bytes',
     };
     // Fork 改动：支持 HTTP Range（206 分段）。没有它，浏览器对本地视频/音频的拖进度
-    // 会被当成 200 全量响应而重置回 0s；Mineradio 原版 serveStatic 是整文件读入、无 Range。
+    // 会被当成 200 全量响应而重置回 0s；全能播放器原版 serveStatic 是整文件读入、无 Range。
     const range = req && req.headers && req.headers.range;
     if (range) {
       const m = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
@@ -729,7 +729,7 @@ function normalizeManifestUpdateInfo(data) {
     latestVersion,
     release: {
       tagName: release.tagName || release.tag_name || data.tagName || ('v' + latestVersion),
-      name: release.name || data.name || ('Mineradio v' + latestVersion),
+      name: release.name || data.name || ('全能播放器 v' + latestVersion),
       version: latestVersion,
       publishedAt: release.publishedAt || release.published_at || data.publishedAt || '',
       htmlUrl,
@@ -751,7 +751,7 @@ async function readUpdateManifest(ref) {
   if (!value) throw new Error('UPDATE_MANIFEST_MISSING');
   if (/^https?:\/\//i.test(value)) {
     const resp = await fetch(value, {
-      headers: { 'User-Agent': `Mineradio/${APP_VERSION}` },
+      headers: { 'User-Agent': `AllInOnePlayer/${APP_VERSION}` },
     });
     if (!resp.ok) throw new Error('Update manifest ' + resp.status);
     return resp.json();
@@ -843,7 +843,7 @@ function localUpdateFallback(reason, opts) {
     latestVersion: APP_VERSION,
     release: {
       tagName: 'v' + APP_VERSION,
-      name: 'Mineradio v' + APP_VERSION,
+      name: '全能播放器 v' + APP_VERSION,
       version: APP_VERSION,
       htmlUrl: '',
       externalUrl: '',
@@ -942,7 +942,7 @@ async function fetchTextFromCandidates(candidates, timeoutMs) {
     const candidate = list[i];
     try {
       const resp = await fetchWithTimeout(candidate.url, {
-        headers: { 'User-Agent': `Mineradio/${APP_VERSION}` },
+        headers: { 'User-Agent': `AllInOnePlayer/${APP_VERSION}` },
       }, timeoutMs || 6500);
       if (!resp.ok) throw updateError('HTTP_' + resp.status, 'HTTP ' + resp.status);
       return { text: await resp.text(), candidate };
@@ -971,7 +971,7 @@ function parseLatestYmlUpdateInfo(text, reason) {
     latestVersion,
     release: {
       tagName: 'v' + latestVersion,
-      name: 'Mineradio v' + latestVersion,
+      name: '全能播放器 v' + latestVersion,
       version: latestVersion,
       publishedAt: releaseDate,
       htmlUrl,
@@ -983,7 +983,7 @@ function parseLatestYmlUpdateInfo(text, reason) {
       patch: null,
       patchAvailable: false,
       summary: '发现新版本，请前往发布页面获取安装包。',
-      notes: ['更新入口已改为浏览器外部下载', 'Mineradio 不再在本地下载或应用补丁'],
+      notes: ['更新入口已改为浏览器外部下载', '全能播放器不再在本地下载或应用补丁'],
     },
     source: 'latest-yml',
     reason: reason || '',
@@ -1006,7 +1006,7 @@ async function fetchLatestUpdateInfo() {
     const resp = await fetch(apiUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': `Mineradio/${APP_VERSION}`,
+        'User-Agent': `AllInOnePlayer/${APP_VERSION}`,
         'Accept': 'application/vnd.github+json',
       },
     });
@@ -1029,7 +1029,7 @@ async function fetchLatestUpdateInfo() {
       latestVersion,
       release: {
         tagName: data.tag_name || ('v' + latestVersion),
-        name: data.name || ('Mineradio v' + latestVersion),
+        name: data.name || ('全能播放器 v' + latestVersion),
         version: latestVersion,
         publishedAt: data.published_at || '',
         htmlUrl,
@@ -4730,17 +4730,17 @@ const server = http.createServer(async (req, res) => {
   const pn = url.pathname;
 
   if (pn === '/api/spotify' || pn.indexOf('/api/spotify/') === 0) {
-    sendJSON(res, { ok: false, error: 'PROVIDER_REMOVED', message: '该平台接口已从 Mineradio 移除。' }, 404);
+    sendJSON(res, { ok: false, error: 'PROVIDER_REMOVED', message: '该平台接口已移除。' }, 404);
     return;
   }
 
-  // Fork 改动：删掉 Mineradio 的登录彩蛋锁（423 LOGIN_EASTER_EGG_LOCKED）。
+  // Fork 改动：删掉 全能播放器 的登录彩蛋锁（423 LOGIN_EASTER_EGG_LOCKED）。
   // 我们的产品登录不需要先解彩蛋，否则所有登录接口都会被锁死。
 
   if (pn === '/api/app/version') {
     sendJSON(res, {
       name: APP_PACKAGE.name || 'mineradio',
-      productName: APP_PACKAGE.productName || 'Mineradio',
+      productName: APP_PACKAGE.productName || '全能播放器',
       version: APP_VERSION,
       update: {
         provider: UPDATE_CONFIG.provider,
@@ -4861,7 +4861,7 @@ const server = http.createServer(async (req, res) => {
       ok: false,
       externalOnly: true,
       error: 'UPDATE_EXTERNAL_ONLY',
-      message: 'Mineradio 已停用客户端本地下载与快速补丁，请使用外部下载页面。',
+      message: '全能播放器已停用客户端本地下载与快速补丁，请使用外部下载页面。',
     }, 410);
     return;
   }
@@ -4878,7 +4878,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Cuefield only consumes Mineradio's existing local beat-map cache. It never
+  // Cuefield only consumes 全能播放器's existing local beat-map cache. It never
   // receives account cookies, song files, or playback URLs on this route.
   if (pn === '/api/cuefield/transition') {
     if (req.method !== 'POST') {
@@ -4913,7 +4913,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Feedback remains on this computer under Electron userData. The fan project's
-  // optional remote-feedback module is intentionally not wired into Mineradio.
+  // optional remote-feedback module is intentionally not wired into 全能播放器.
   if (pn === '/api/cuefield/feedback') {
     if (req.method === 'GET') {
       try {
@@ -5188,7 +5188,7 @@ const server = http.createServer(async (req, res) => {
           : (err.code === 'SPOTIFY_CLIENT_ID_INVALID'
             ? 'Client ID 格式不正确，请只复制 Spotify Dashboard 中的 Client ID。'
             : (err.code === 'SPOTIFY_REDIRECT_URI_INVALID'
-              ? '回调地址无效，请使用 Mineradio 显示的 127.0.0.1 回调地址。'
+              ? '回调地址无效，请使用全能播放器显示的 127.0.0.1 回调地址。'
               : err.message)),
         missing,
       }, err && /^SPOTIFY_(?:CLIENT_ID|REDIRECT_URI)_/.test(String(err.code || '')) ? 400 : 500);

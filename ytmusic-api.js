@@ -5,7 +5,7 @@
 // full-length audio streams, lyrics (plain text) and public playlists.
 // Stream URLs are signed, ~6h expiry and IP-bound: resolve fresh on every
 // play, never persist. ANDROID_VR is the PoToken-free client for stream
-// resolution (the pattern used by the Mineradio fork that runs on YTM).
+// resolution (the pattern used by the 全能播放器 fork that runs on YTM).
 // Library sync needs a signed-in music.youtube.com cookie (harvested from an
 // Electron login window); without it, library endpoints return login_required.
 
