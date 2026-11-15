@@ -11,10 +11,10 @@
   !define MUI_DIRECTORYPAGE_TEXTCOLOR "111217"
 !endif
 !ifndef MUI_INSTFILESPAGE_COLORS
-  !define MUI_INSTFILESPAGE_COLORS "3257F7 FFFFFF"
+  !define MUI_INSTFILESPAGE_COLORS "7C3AED FFFFFF"
 !endif
 !ifndef MUI_FINISHPAGE_LINK_COLOR
-  !define MUI_FINISHPAGE_LINK_COLOR "3257F7"
+  !define MUI_FINISHPAGE_LINK_COLOR "7C3AED"
 !endif
 !ifndef MUI_HEADERIMAGE
   !define MUI_HEADERIMAGE
@@ -38,7 +38,7 @@
 !include WinMessages.nsh
 
 !ifndef MINERADIO_INSTALL_DIR_NAME
-  !define MINERADIO_INSTALL_DIR_NAME "Mineradio"
+  !define MINERADIO_INSTALL_DIR_NAME "全能播放器"
 !endif
 !ifndef MINERADIO_INSTALL_DIR_NAME_LOWER
   !define MINERADIO_INSTALL_DIR_NAME_LOWER "mineradio"
@@ -50,10 +50,10 @@
   !define MINERADIO_MARKER_APP_ID "com.mineradio.desktop"
 !endif
 !ifndef MINERADIO_INSTALL_BRAND
-  !define MINERADIO_INSTALL_BRAND "MINERADIO"
+  !define MINERADIO_INSTALL_BRAND "全能播放器"
 !endif
 !ifndef MINERADIO_INSTALL_TITLE
-  !define MINERADIO_INSTALL_TITLE "Mineradio 安装"
+  !define MINERADIO_INSTALL_TITLE "全能播放器 安装"
 !endif
 !ifndef MINERADIO_INSTALL_NOTICE
   !define MINERADIO_INSTALL_NOTICE ""
@@ -67,6 +67,7 @@
   Var MineradioSmallFont
   Var MineradioDirectoryPage
   Var MineradioDirectoryInput
+  Var MineradioOldInstallDir
 !endif
 
 !macro customInit
@@ -85,6 +86,16 @@
     FileWrite $0 "Mineradio install root$\r$\n"
     FileWrite $0 "appId=${MINERADIO_MARKER_APP_ID}$\r$\n"
     FileClose $0
+  ${EndIf}
+  ; Migrate away from a legacy Mineradio install folder (best effort):
+  ; the old folder is removed only when it still carries our install marker.
+  ${If} $MineradioOldInstallDir != ""
+  ${AndIf} $MineradioOldInstallDir != $INSTDIR
+    IfFileExists "$MineradioOldInstallDir\${MINERADIO_INSTALL_MARKER}" mineradio_remove_old mineradio_remove_old_done
+    mineradio_remove_old:
+      RMDir /r "$MineradioOldInstallDir"
+      DetailPrint "Removed legacy install folder: $MineradioOldInstallDir"
+    mineradio_remove_old_done:
   ${EndIf}
 !macroend
 
@@ -188,7 +199,7 @@ Function MineradioTintCommonControls
     ${EndIf}
     GetDlgItem $1 $0 1004
     ${If} $1 <> 0
-      SetCtlColors $1 "3257F7" "FFFFFF"
+      SetCtlColors $1 "7C3AED" "FFFFFF"
     ${EndIf}
     GetDlgItem $1 $0 1006
     ${If} $1 <> 0
@@ -249,11 +260,29 @@ Function MineradioUsePreferredInstallDir
     Pop $R2
     ${If} $R2 != "1"
       Call MineradioUseFirstAvailableInstallDir
+    ${Else}
+      Call MineradioMigrateLegacyInstallDir
     ${EndIf}
   ${EndIf}
   Push "$INSTDIR"
   Call MineradioNormalizeInstallDir
   Pop $INSTDIR
+FunctionEnd
+
+Function MineradioMigrateLegacyInstallDir
+  ; A registered install that still lives in a legacy Mineradio folder is
+  ; moved to the new brand folder. The old path is remembered so the
+  ; installer can remove it after the new files are in place.
+  StrLen $1 "$INSTDIR"
+  ${If} $1 >= 10
+    StrCpy $6 "$INSTDIR" 10 -10
+    ${If} $6 == "\Mineradio"
+    ${OrIf} $6 == "\mineradio"
+      StrCpy $MineradioOldInstallDir "$INSTDIR"
+      StrCpy $INSTDIR "$INSTDIR" -9
+      StrCpy $INSTDIR "$INSTDIR${MINERADIO_INSTALL_DIR_NAME}"
+    ${EndIf}
+  ${EndIf}
 FunctionEnd
 
 Function MineradioUseFirstAvailableInstallDir
@@ -410,11 +439,20 @@ Function MineradioNormalizeInstallDir
   StrLen $1 "$0"
   IntOp $5 $4 + 1
   StrCpy $2 "$0" $5 -$5
+  ; A legacy Mineradio / mineradio folder tail stays usable as-is.
+  ${If} $1 >= 10
+    StrCpy $6 "$0" 10 -10
+    ${If} $6 == "\Mineradio"
+    ${OrIf} $6 == "\mineradio"
+      Goto normalize_done
+    ${EndIf}
+  ${EndIf}
   ${If} $1 < $5
   ${OrIf} $2 != "\${MINERADIO_INSTALL_DIR_NAME}"
   ${AndIf} $2 != "\${MINERADIO_INSTALL_DIR_NAME_LOWER}"
     StrCpy $0 "$0\${MINERADIO_INSTALL_DIR_NAME}"
   ${EndIf}
+  normalize_done:
   Exch $0
 FunctionEnd
 
@@ -675,7 +713,7 @@ Function MineradioDisableUnsafeOldUninstallers
   Call MineradioOldInstallPathNeedsQuarantine
   Pop $1
   ${If} $1 == "1"
-    DetailPrint "Skip unsafe legacy Mineradio uninstaller: $0"
+    DetailPrint "Skip unsafe legacy uninstaller: $0"
     StrCpy $2 "1"
   ${EndIf}
 
@@ -686,7 +724,7 @@ Function MineradioDisableUnsafeOldUninstallers
   Call MineradioOldInstallPathNeedsQuarantine
   Pop $1
   ${If} $1 == "1"
-    DetailPrint "Skip unsafe legacy Mineradio uninstaller: $0"
+    DetailPrint "Skip unsafe legacy uninstaller: $0"
     StrCpy $2 "1"
   ${EndIf}
 
@@ -704,7 +742,7 @@ Function MineradioDisableUnsafeOldUninstallers
   Call MineradioOldInstallPathNeedsQuarantine
   Pop $1
   ${If} $1 == "1"
-    DetailPrint "Skip unsafe legacy Mineradio uninstaller: $0"
+    DetailPrint "Skip unsafe legacy uninstaller: $0"
     StrCpy $2 "1"
   ${EndIf}
 
@@ -715,7 +753,7 @@ Function MineradioDisableUnsafeOldUninstallers
   Call MineradioOldInstallPathNeedsQuarantine
   Pop $1
   ${If} $1 == "1"
-    DetailPrint "Skip unsafe legacy Mineradio uninstaller: $0"
+    DetailPrint "Skip unsafe legacy uninstaller: $0"
     StrCpy $2 "1"
   ${EndIf}
 
@@ -733,7 +771,7 @@ Function MineradioDeleteLegacyUninstallerFileIfMissingMarker
     Pop $1
     ${If} $1 != ""
       IfFileExists "$1\${MINERADIO_INSTALL_MARKER}" done 0
-      DetailPrint "Remove legacy Mineradio uninstaller file: $1"
+      DetailPrint "Remove legacy uninstaller file: $1"
       Delete "$1\Uninstall ${PRODUCT_FILENAME}.exe"
     ${EndIf}
   ${EndIf}
@@ -764,7 +802,7 @@ Function MineradioValidateInstallDir
       ${If} $2 == "1"
       ${AndIf} $3 != "1"
       ${AndIf} $4 != "1"
-        MessageBox MB_ICONSTOP|MB_OK "检测到这台电脑还有 D-Z 盘，Mineradio 不安装到 C 盘。请改选 D 盘或其它非 C 盘的 Mineradio 文件夹。$\r$\n$\r$\n如果电脑只有 C 盘，安装器会自动放行 C:\Mineradio。"
+        MessageBox MB_ICONSTOP|MB_OK "检测到这台电脑还有 D-Z 盘，全能播放器不安装到 C 盘。请改选 D 盘或其它非 C 盘的全能播放器文件夹。$\r$\n$\r$\n如果电脑只有 C 盘，安装器会自动放行 C:\全能播放器。"
         Abort
       ${EndIf}
     ${EndIf}
@@ -774,12 +812,21 @@ Function MineradioValidateInstallDir
   StrLen $2 "${MINERADIO_INSTALL_DIR_NAME}"
   IntOp $2 $2 + 1
   StrCpy $1 "$INSTDIR" $2 -$2
+  ; A legacy Mineradio / mineradio folder tail is still a valid install dir.
+  ${If} $0 >= 10
+    StrCpy $6 "$INSTDIR" 10 -10
+    ${If} $6 == "\Mineradio"
+    ${OrIf} $6 == "\mineradio"
+      Goto validate_tail_ok
+    ${EndIf}
+  ${EndIf}
   ${If} $0 < $2
   ${OrIf} $1 != "\${MINERADIO_INSTALL_DIR_NAME}"
   ${AndIf} $1 != "\${MINERADIO_INSTALL_DIR_NAME_LOWER}"
-    MessageBox MB_ICONSTOP|MB_OK "安装目录必须是独立的 Mineradio 文件夹。请选择一个上级目录，安装器会自动创建 Mineradio 子文件夹。"
+    MessageBox MB_ICONSTOP|MB_OK "安装目录必须是独立的全能播放器文件夹。请选择一个上级目录，安装器会自动创建全能播放器子文件夹。"
     Abort
   ${EndIf}
+  validate_tail_ok:
 
   IfFileExists "$INSTDIR\*.*" 0 valid
 
@@ -805,7 +852,7 @@ Function MineradioValidateInstallDir
     Goto valid
   ${EndIf}
 
-  MessageBox MB_ICONSTOP|MB_OK "为避免卸载时误删其它文件，Mineradio 不能安装到已有文件的非专属目录。请新建或选择一个空的 Mineradio 文件夹。$\r$\n$\r$\n当前路径：$INSTDIR"
+  MessageBox MB_ICONSTOP|MB_OK "为避免卸载时误删其它文件，全能播放器不能安装到已有文件的非专属目录。请新建或选择一个空的全能播放器文件夹。$\r$\n$\r$\n当前路径：$INSTDIR"
   Abort
 
   valid:
@@ -828,7 +875,7 @@ Function MineradioWelcomeShow
   ${NSD_CreateLabel} 22u 20u 120u 10u "${MINERADIO_INSTALL_BRAND}"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioSmallFont 1
-  SetCtlColors $0 "3257F7" "FFFFFF"
+  SetCtlColors $0 "7C3AED" "FFFFFF"
 
   ${NSD_CreateLabel} 22u 42u 226u 30u "${MINERADIO_INSTALL_TITLE}"
   Pop $0
@@ -837,7 +884,7 @@ Function MineradioWelcomeShow
 
   ${NSD_CreateLabel} 22u 78u 36u 2u ""
   Pop $0
-  SetCtlColors $0 "" "3257F7"
+  SetCtlColors $0 "" "7C3AED"
 
   ${NSD_CreateLabel} 22u 96u 238u 24u "为这台电脑安装 ${PRODUCT_NAME}。默认安装到 D:\${MINERADIO_INSTALL_DIR_NAME}，下一步可以自由选择其它位置。"
   Pop $0
@@ -847,7 +894,7 @@ Function MineradioWelcomeShow
   ${NSD_CreateLabel} 22u 130u 238u 12u "默认位置：$INSTDIR"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioTitleFont 1
-  SetCtlColors $0 "3257F7" "FFFFFF"
+  SetCtlColors $0 "7C3AED" "FFFFFF"
 
   !ifdef MINERADIO_INTERNAL_BETA
     ${NSD_CreateLabel} 22u 150u 238u 28u "${MINERADIO_INSTALL_NOTICE}"
@@ -899,7 +946,7 @@ Function MineradioDirectoryShow
   ${NSD_CreateLabel} 22u 76u 238u 10u "安装目录"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioSmallFont 1
-  SetCtlColors $0 "3257F7" "FFFFFF"
+  SetCtlColors $0 "7C3AED" "FFFFFF"
 
   ${NSD_CreateText} 22u 94u 178u 15u "$INSTDIR"
   Pop $MineradioDirectoryInput
@@ -974,11 +1021,20 @@ Function un.MineradioNormalizeInstallDir
   StrLen $1 "$0"
   IntOp $5 $4 + 1
   StrCpy $2 "$0" $5 -$5
+  ; A legacy Mineradio / mineradio folder tail stays usable as-is.
+  ${If} $1 >= 10
+    StrCpy $6 "$0" 10 -10
+    ${If} $6 == "\Mineradio"
+    ${OrIf} $6 == "\mineradio"
+      Goto normalize_done
+    ${EndIf}
+  ${EndIf}
   ${If} $1 < $5
   ${OrIf} $2 != "\${MINERADIO_INSTALL_DIR_NAME}"
   ${AndIf} $2 != "\${MINERADIO_INSTALL_DIR_NAME_LOWER}"
     StrCpy $0 "$0\${MINERADIO_INSTALL_DIR_NAME}"
   ${EndIf}
+  normalize_done:
   Exch $0
 FunctionEnd
 
@@ -1006,7 +1062,7 @@ Function un.MineradioValidateUninstallDir
   Call un.MineradioNormalizeInstallDir
   Pop $1
   ${If} $0 != $1
-    MessageBox MB_OK|MB_ICONSTOP "当前卸载路径不是 Mineradio 专属目录，已阻止卸载以避免误删其它文件。$\r$\n$\r$\n当前路径：$INSTDIR$\r$\n安全路径应为：$0"
+    MessageBox MB_OK|MB_ICONSTOP "当前卸载路径不是全能播放器专属目录，已阻止卸载以避免误删其它文件。$\r$\n$\r$\n当前路径：$INSTDIR$\r$\n安全路径应为：$0"
     SetErrorLevel 2
     Quit
   ${EndIf}
@@ -1016,7 +1072,7 @@ Function un.MineradioValidateUninstallDir
   Call un.MineradioInstallDirLooksOwned
   Pop $0
   ${If} $0 != "1"
-    MessageBox MB_OK|MB_ICONSTOP "无法确认当前目录属于 Mineradio，已阻止卸载以避免误删其它文件。$\r$\n$\r$\n当前路径：$INSTDIR"
+    MessageBox MB_OK|MB_ICONSTOP "无法确认当前目录属于全能播放器，已阻止卸载以避免误删其它文件。$\r$\n$\r$\n当前路径：$INSTDIR"
     SetErrorLevel 2
     Quit
   ${EndIf}
