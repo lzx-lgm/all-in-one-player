@@ -11,6 +11,8 @@ const {
   song_detail,
   song_url,
   song_url_v1,
+  mv_url,
+  mv_first,
   login_qr_key,
   login_qr_create,
   login_qr_check,
@@ -1332,6 +1334,17 @@ function mapSongRecord(s) {
     popularity: Number(s.pop || s.popularity || s.score || s.hotScore || 0) || 0,
     searchRank: s.rank === null || s.rank === undefined || s.rank === '' ? null : Number(s.rank),
     fee: s.fee,
+  };
+}
+function mapMvRecord(m) {
+  m = m || {};
+  return {
+    id: m.id,
+    name: m.name || '',
+    artist: m.artistName || (m.artists ? m.artists.map(a => a.name).join(' / ') : '') || (m.artist && m.artist.name) || '',
+    cover: m.cover || '',
+    duration: Number(m.duration) || 0,
+    playCount: Number(m.playCount) || 0,
   };
 }
 function mapDiscoverPlaylist(pl, tag) {
@@ -5015,6 +5028,40 @@ const server = http.createServer(async (req, res) => {
       const songs = await handleSearch(kw, limit, offset);
       sendJSON(res, { songs, offset, limit, nextOffset: offset + songs.length, hasMore: songs.length >= limit });
     } catch (err) { console.error('[Search]', err); sendJSON(res, { error: err.message, songs: [] }, 500); }
+    return;
+  }
+
+  // ---- 音乐 MV（网易云，v2.0.4）：搜 MV / 最新 MV / 取播放地址 ----
+  // NETEASE_API_PROXY 只供开发机验证（本机直连走不通时代理出去）；正式包不设它，不影响用户电脑上的直连。
+  if (pn === '/api/mv/search') {
+    try {
+      const kw = url.searchParams.get('keywords') || '';
+      const limit = Math.max(1, Math.min(30, parseInt(url.searchParams.get('limit') || '12', 10) || 12));
+      if (!kw) { sendJSON(res, { mvs: [] }); return; }
+      const r = await cloudsearch({ keywords: kw, type: 1004, limit, cookie: userCookie, ...(process.env.NETEASE_API_PROXY ? { proxy: process.env.NETEASE_API_PROXY } : {}) });
+      const list = (r.body && r.body.result && r.body.result.mvs) || [];
+      sendJSON(res, { mvs: list.map(mapMvRecord) });
+    } catch (err) { console.error('[MvSearch]', err); sendJSON(res, { error: err.message, mvs: [] }, 500); }
+    return;
+  }
+  if (pn === '/api/mv/first') {
+    try {
+      const limit = Math.max(1, Math.min(30, parseInt(url.searchParams.get('limit') || '12', 10) || 12));
+      const r = await mv_first({ limit, ...(process.env.NETEASE_API_PROXY ? { proxy: process.env.NETEASE_API_PROXY } : {}) });
+      const list = (r.body && r.body.data) || [];
+      sendJSON(res, { mvs: list.map(mapMvRecord) });
+    } catch (err) { console.error('[MvFirst]', err); sendJSON(res, { error: err.message, mvs: [] }, 500); }
+    return;
+  }
+  if (pn === '/api/mv/url') {
+    try {
+      const id = url.searchParams.get('id') || '';
+      if (!id) { sendJSON(res, { playable: false, error: 'MISSING_ID' }, 400); return; }
+      const r = await mv_url({ id, cookie: userCookie, ...(process.env.NETEASE_API_PROXY ? { proxy: process.env.NETEASE_API_PROXY } : {}) });
+      const d = (r.body && r.body.data) || {};
+      if (d.url) sendJSON(res, { playable: true, url: d.url, id });
+      else sendJSON(res, { playable: false, error: 'MV_URL_UNAVAILABLE', message: '该 MV 暂时取不到播放地址（可能需要登录或会员）' });
+    } catch (err) { console.error('[MvUrl]', err); sendJSON(res, { playable: false, error: err.message }, 500); }
     return;
   }
 
