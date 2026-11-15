@@ -556,7 +556,7 @@ function playlistPanelBuildVirtualEntries() {
   if (playlistPanelVirtualCache.revision === playlistCatalogRevision &&
       playlistPanelVirtualCache.detailKey === playlistPanelDetailState.key &&
       playlistPanelVirtualCache.detailSig === detailSig) return playlistPanelVirtualCache;
-  var labels = { mineradio: 'Mineradio 内置歌单', netease: '网易云歌单', qq: 'QQ 音乐歌单', kugou: '酷狗音乐歌单', qishui: '汽水音乐歌单', spotify: 'Spotify 歌单' };
+  var labels = { mineradio: '全能播放器内置歌单', netease: '网易云歌单', qq: 'QQ 音乐歌单', kugou: '酷狗音乐歌单', qishui: '汽水音乐歌单', spotify: 'Spotify 歌单' };
   var order = ['mineradio', 'netease', 'qq', 'kugou', 'qishui', 'spotify'];
   var groups = { mineradio: [], netease: [], qq: [], kugou: [], qishui: [], spotify: [] };
   userPlaylists.forEach(function (pl, sourceIndex) {
