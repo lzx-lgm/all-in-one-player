@@ -3168,6 +3168,78 @@ async function fetchQQLikedPlaylistPage(opts) {
   };
 }
 
+// v2.0.7: QQ 平台推荐 — 热门推荐歌单 (playlist.HotRecommendServer/get_hot_recommend)
+// → 取其曲目 (music.srfDissInfo.DissInfo/CgiGetDiss)。全匿名链路，VM 实测通过；
+// 不要复用 handleQQPlaylistTracks（登录门控 + 不同端点），不要用已死的
+// recom.playlist / music.recom / get_today_recommend，也不要用关键词搜索替代。
+async function handleQQRecommendations(limit) {
+  limit = Math.max(4, Math.min(Number(limit) || 12, 20));
+  const cookieObj = qqCookieObject();
+  const loggedIn = !!(qqCookieUin(cookieObj) && qqCookieMusicKey(cookieObj));
+  try {
+    const hot = await qqMusicRequest({
+      comm: { ct: 24, cv: 0 },
+      recomPlaylist: {
+        module: 'playlist.HotRecommendServer',
+        method: 'get_hot_recommend',
+        param: { async: 1, cmd: 2 },
+      },
+    }, { timeoutMs: 10000 });
+    const hotBlock = hot && hot.recomPlaylist;
+    const hotList = hotBlock && hotBlock.data && Array.isArray(hotBlock.data.v_hot)
+      ? hotBlock.data.v_hot
+      : [];
+    for (let i = 0; i < Math.min(3, hotList.length); i += 1) {
+      const playlist = hotList[i] || {};
+      const contentId = Number(playlist.content_id || playlist.tid || 0);
+      if (!contentId) continue;
+      try {
+        const body = await qqMusicRequest({
+          comm: { ct: 24, cv: 0 },
+          req_0: {
+            module: 'music.srfDissInfo.DissInfo',
+            method: 'CgiGetDiss',
+            param: {
+              disstid: contentId,
+              dirid: 0,
+              tag: 1,
+              song_begin: 0,
+              song_num: limit,
+              userinfo: 1,
+              orderlist: 1,
+            },
+          },
+        }, { timeoutMs: 10000 });
+        const block = body && body.req_0;
+        const data = block && block.data || {};
+        const code = Number(body && body.code) || Number(block && block.code) || Number(data.code) || 0;
+        if (!block || code !== 0) continue;
+        const rawTracks = Array.isArray(data.songlist) ? data.songlist : [];
+        const songs = rawTracks.map(mapQQPlaylistTrack).filter(song => song.name && (song.mid || song.id));
+        if (songs.length) {
+          return {
+            provider: 'qq',
+            loggedIn,
+            songs: songs.slice(0, limit),
+            playlist: {
+              title: playlist.title || '',
+              cover: playlist.cover || '',
+              contentId,
+              listenNum: Number(playlist.listen_num || 0),
+            },
+            updatedAt: Date.now(),
+          };
+        }
+      } catch (e) {
+        console.warn('[QQRecommendations] CgiGetDiss failed for', contentId, e.message);
+      }
+    }
+  } catch (e) {
+    console.warn('[QQRecommendations] hot recommend failed:', e.message);
+  }
+  return { provider: 'qq', loggedIn, songs: [], error: 'QQ_RECOMMEND_EMPTY', updatedAt: Date.now() };
+}
+
 function buildQQLikedPlaylistCard(info, likedPage, warning) {
   const tracks = likedPage && likedPage.tracks || [];
   const firstTrack = tracks[0] || null;
@@ -5126,6 +5198,17 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[KugouRecommendations]', err);
       sendJSON(res, { provider: 'kugou', error: err.message, songs: [] }, 500);
+    }
+    return;
+  }
+
+  if (pn === '/api/qq/recommendations') {
+    try {
+      const limit = Math.max(4, Math.min(20, parseInt(url.searchParams.get('limit') || '12', 10) || 12));
+      sendJSON(res, await handleQQRecommendations(limit));
+    } catch (err) {
+      console.error('[QQRecommendations]', err);
+      sendJSON(res, { provider: 'qq', error: err.message, songs: [] }, 500);
     }
     return;
   }
