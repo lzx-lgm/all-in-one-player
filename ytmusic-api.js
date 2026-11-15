@@ -169,6 +169,66 @@ async function handleYtmSongUrl(params, cookie) {
   return { provider: 'ytmusic', url: '', playable: false, reason: 'url_unavailable', detail: lastError, videoId };
 }
 
+// v2.0.5: YouTube Music MVs — video search + muxed video+audio stream URL.
+// A <video> element cannot play separate audio/video streams, so only the
+// muxed formats (usually itag 18, 360p) are usable; adaptive video-only
+// formats are skipped. Same client rotation + probe as the audio path.
+async function handleYtmVideoSearch(keywords, limit) {
+  const q = String(keywords || '').trim();
+  if (!q) return { provider: 'ytmusic', videos: [] };
+  const n = Math.max(1, Math.min(20, parseInt(limit, 10) || 12));
+  const yt = await getYt();
+  const res = await yt.search(q, { type: 'video' });
+  const items = (res && res.results) || [];
+  const videos = items.filter((v) => v && v.id).slice(0, n).map((v) => ({
+    provider: 'ytmusic',
+    id: v.id,
+    videoId: v.id,
+    name: textOf(v.title) || '',
+    artist: (v.author && (v.author.name || textOf(v.author))) || '',
+    cover: thumbOf(v),
+    duration: (v.duration && v.duration.seconds ? v.duration.seconds * 1000 : 0),
+  })).filter((v) => v.name);
+  return { provider: 'ytmusic', videos };
+}
+
+async function handleYtmVideoUrl(videoId) {
+  const id = String(videoId || '').trim();
+  if (!id) return { provider: 'ytmusic', url: '', playable: false, reason: 'missing_id' };
+  const yt = await getYt();
+  let lastError = '';
+  let firstMuxed = null;
+  for (const client of YTMUSIC_STREAM_CLIENTS) {
+    try {
+      const info = await yt.getInfo(id, { client });
+      const muxed = ((info.streaming_data && info.streaming_data.formats) || [])
+        .filter((f) => f.url && f.mime_type && f.mime_type.indexOf('video/') === 0)
+        .sort((a, b) => (b.width || 0) - (a.width || 0));
+      if (!muxed.length) { lastError = 'no_muxed_format_' + client; continue; }
+      if (!firstMuxed) firstMuxed = { url: muxed[0].url, quality: muxed[0].mime_type, width: muxed[0].width || 0, height: muxed[0].height || 0, client };
+      for (const fmt of muxed.slice(0, 2)) {
+        if (await probeYtmAudioUrl(fmt.url)) {
+          return {
+            provider: 'ytmusic', url: fmt.url, playable: true,
+            quality: fmt.mime_type, width: fmt.width || 0, height: fmt.height || 0,
+            videoId: id, client,
+          };
+        }
+      }
+      lastError = 'probe_failed_' + client;
+    } catch (e) { lastError = e.message || ('client_failed_' + client); }
+  }
+  // 与 QQ 音频解析相同的兜底：探针失败未必是地址死了（本机直连可能被挡，
+  // 而播放走的是 /api/video 代理），返回第一个合流地址让播放器自己试，
+  // 播不了影院会自动换下一张。
+  if (firstMuxed) {
+    return { provider: 'ytmusic', url: firstMuxed.url, playable: true, probeSkipped: true,
+      quality: firstMuxed.quality, width: firstMuxed.width, height: firstMuxed.height,
+      videoId: id, client: firstMuxed.client };
+  }
+  return { provider: 'ytmusic', url: '', playable: false, reason: 'url_unavailable', detail: lastError, videoId: id };
+}
+
 async function handleYtmLyric(videoId) {
   const id = String(videoId || '').trim();
   if (!id) return { provider: 'ytmusic', lyric: '', lrc: '', hasLyric: false, synced: false };
@@ -254,6 +314,8 @@ module.exports = {
   handleYtmSearch,
   handleYtmSongUrl,
   handleYtmLyric,
+  handleYtmVideoSearch,
+  handleYtmVideoUrl,
   handleYtmPlaylistSearch,
   handleYtmPlaylistTracks,
   handleYtmUserPlaylists,

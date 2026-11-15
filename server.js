@@ -108,6 +108,8 @@ const {
   handleYtmSearch,
   handleYtmSongUrl,
   handleYtmLyric,
+  handleYtmVideoSearch,
+  handleYtmVideoUrl,
   handleYtmPlaylistSearch,
   handleYtmPlaylistTracks,
   handleYtmUserPlaylists,
@@ -1345,6 +1347,7 @@ function mapMvRecord(m) {
     cover: m.cover || '',
     duration: Number(m.duration) || 0,
     playCount: Number(m.playCount) || 0,
+    provider: 'netease',
   };
 }
 function mapDiscoverPlaylist(pl, tag) {
@@ -5031,16 +5034,32 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ---- 音乐 MV（网易云，v2.0.4）：搜 MV / 最新 MV / 取播放地址 ----
+  // ---- 音乐 MV（v2.0.4 网易云，v2.0.5 + YouTube Music）：搜 MV / 最新 MV / 取播放地址 ----
   // NETEASE_API_PROXY 只供开发机验证（本机直连走不通时代理出去）；正式包不设它，不影响用户电脑上的直连。
   if (pn === '/api/mv/search') {
     try {
       const kw = url.searchParams.get('keywords') || '';
       const limit = Math.max(1, Math.min(30, parseInt(url.searchParams.get('limit') || '12', 10) || 12));
       if (!kw) { sendJSON(res, { mvs: [] }); return; }
-      const r = await cloudsearch({ keywords: kw, type: 1004, limit, cookie: userCookie, ...(process.env.NETEASE_API_PROXY ? { proxy: process.env.NETEASE_API_PROXY } : {}) });
-      const list = (r.body && r.body.result && r.body.result.mvs) || [];
-      sendJSON(res, { mvs: list.map(mapMvRecord) });
+      const [ne, yt] = await Promise.allSettled([
+        (async () => {
+          const r = await cloudsearch({ keywords: kw, type: 1004, limit, cookie: userCookie, ...(process.env.NETEASE_API_PROXY ? { proxy: process.env.NETEASE_API_PROXY } : {}) });
+          return ((r.body && r.body.result && r.body.result.mvs) || []).map(mapMvRecord);
+        })(),
+        (async () => {
+          const r = await handleYtmVideoSearch(kw, Math.max(6, Math.min(12, limit)));
+          return (r.videos || []).map((v) => ({
+            id: v.id, name: v.name, artist: v.artist, cover: v.cover || '',
+            duration: Number(v.duration) || 0, playCount: 0, provider: 'ytmusic',
+          }));
+        })(),
+      ]);
+      const mvs = [];
+      if (ne.status === 'fulfilled') mvs.push(...ne.value);
+      if (yt.status === 'fulfilled') mvs.push(...yt.value);
+      if (ne.status === 'rejected') console.error('[MvSearch] netease failed:', ne.reason && ne.reason.message);
+      if (yt.status === 'rejected') console.error('[MvSearch] ytmusic failed:', yt.reason && yt.reason.message);
+      sendJSON(res, { mvs: mvs.slice(0, limit + 8) });
     } catch (err) { console.error('[MvSearch]', err); sendJSON(res, { error: err.message, mvs: [] }, 500); }
     return;
   }
@@ -5056,7 +5075,14 @@ const server = http.createServer(async (req, res) => {
   if (pn === '/api/mv/url') {
     try {
       const id = url.searchParams.get('id') || '';
+      const provider = url.searchParams.get('provider') || 'netease';
       if (!id) { sendJSON(res, { playable: false, error: 'MISSING_ID' }, 400); return; }
+      if (provider === 'ytmusic') {
+        const r = await handleYtmVideoUrl(id);
+        if (r.playable) sendJSON(res, { playable: true, url: r.url, id, provider: 'ytmusic' });
+        else sendJSON(res, { playable: false, error: 'MV_URL_UNAVAILABLE', message: '该 YouTube Music 视频暂时取不到播放地址', detail: r.detail || r.reason });
+        return;
+      }
       const r = await mv_url({ id, cookie: userCookie, ...(process.env.NETEASE_API_PROXY ? { proxy: process.env.NETEASE_API_PROXY } : {}) });
       const d = (r.body && r.body.data) || {};
       if (d.url) sendJSON(res, { playable: true, url: d.url, id });

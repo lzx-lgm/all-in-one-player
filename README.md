@@ -42,9 +42,9 @@
 
 从 [Releases](https://github.com/lzx-lgm/all-in-one-player/releases) 下载对应系统的安装包：
 
-- Windows：`AllInOnePlayer-2.0.4-Setup.exe`
-- macOS：`AllInOnePlayer-2.0.4-arm64.dmg` / `AllInOnePlayer-2.0.4-x64.dmg`
-- Linux：`AllInOnePlayer-2.0.4-x86_64.AppImage` / `AllInOnePlayer-2.0.4-amd64.deb`
+- Windows：`AllInOnePlayer-2.0.5-Setup.exe`
+- macOS：`AllInOnePlayer-2.0.5-arm64.dmg` / `AllInOnePlayer-2.0.5-x64.dmg`
+- Linux：`AllInOnePlayer-2.0.5-x86_64.AppImage` / `AllInOnePlayer-2.0.5-amd64.deb`
 
 ## 本地运行 / 打包
 
