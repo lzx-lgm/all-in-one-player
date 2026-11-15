@@ -121,7 +121,7 @@ function normalizePlaylistProvider(provider) {
 }
 function playlistProviderLabel(provider) {
   provider = normalizePlaylistProvider(provider);
-  if (provider === 'mineradio') return 'MR';
+  if (provider === 'mineradio') return '全能';
   return provider === 'qq' ? 'QQ' : (provider === 'kugou' ? 'KG' : (provider === 'qishui' ? 'QS' : (provider === 'spotify' ? 'SP' : 'NE')));
 }
 function playlistProviderName(provider) {
