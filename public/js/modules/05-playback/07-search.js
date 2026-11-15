@@ -1022,7 +1022,7 @@ function scoreSongSearchResult(song, q, sourceIndex) {
   if (song && song.playable === false) score -= 6;
   return score;
 }
-function mergeSongSearchResults(neteaseSongs, qqSongs, kugouSongs, qishuiSongs, spotifySongs, limit, q) {
+function mergeSongSearchResults(neteaseSongs, qqSongs, kugouSongs, qishuiSongs, appleSongs, kuwoSongs, ytmusicSongs, spotifySongs, limit, q) {
   var out = [];
   var providerSeen = {};
   var canonicalSeen = {};
@@ -1045,6 +1045,9 @@ function mergeSongSearchResults(neteaseSongs, qqSongs, kugouSongs, qishuiSongs, 
   (qqSongs || []).forEach(function (song, i) { push(song, i); });
   (kugouSongs || []).forEach(function (song, i) { push(song, i); });
   (qishuiSongs || []).forEach(function (song, i) { push(song, i); });
+  (appleSongs || []).forEach(function (song, i) { push(song, i); });
+  (kuwoSongs || []).forEach(function (song, i) { push(song, i); });
+  (ytmusicSongs || []).forEach(function (song, i) { push(song, i); });
   (spotifySongs || []).forEach(function (song, i) { push(song, i); });
   out.sort(function (a, b) { return (b._searchScore || 0) - (a._searchScore || 0); });
   return out.slice(0, limit);
@@ -1071,7 +1074,10 @@ function mergeUniqueSearchSongPools(existing, incoming) {
   (incoming || []).forEach(push);
   return out;
 }
-async function fetchMusicSearchResults(q, mode, previousPages) {
+// v2.0.5: 搜索不再等最慢的平台。每个平台 5 秒超时，先到的结果先显示，
+// 后到的平台陆续并进列表；之前 Apple / 酷我 / YouTube Music 的结果
+// 被 merge 漏掉（白白等了时间却不显示），这次一起并进来。
+async function fetchMusicSearchResults(q, mode, previousPages, onPartial) {
   searchProviderNotice = '';
   var providers = activeSearchProvidersForMode(mode);
   if (!providers.length) {
@@ -1087,17 +1093,22 @@ async function fetchMusicSearchResults(q, mode, previousPages) {
   var fetchProviders = providers.filter(function (provider) {
     return !previousPages || !previousPages[provider] || previousPages[provider].hasMore;
   });
-  var result = await Promise.allSettled(fetchProviders.map(function (provider) {
-    var previous = previousPages && previousPages[provider];
-    var offset = previous ? Math.max(0, Number(previous.nextOffset) || 0) : 0;
-    var limit = pageLimitByProvider[provider] || 12;
-    return apiJson(searchProviderUrl(provider, q, limit, offset)).then(function (value) {
-      return { provider: provider, offset: offset, requestedLimit: limit, value: value || {} };
-    });
-  }));
-  var songsByProvider = { netease: [], qq: [], kugou: [], qishui: [], spotify: [] };
-  fetchProviders.forEach(function (provider, index) {
-    var entry = result[index];
+  var songsByProvider = { netease: [], qq: [], kugou: [], qishui: [], apple: [], kuwo: [], ytmusic: [], spotify: [] };
+  function mergeAll() {
+    return mergeSongSearchResults(
+      songsByProvider.netease,
+      songsByProvider.qq,
+      songsByProvider.kugou,
+      songsByProvider.qishui,
+      songsByProvider.apple,
+      songsByProvider.kuwo,
+      songsByProvider.ytmusic,
+      songsByProvider.spotify,
+      MUSIC_SEARCH_MAX_RESULTS,
+      q
+    );
+  }
+  function ingest(provider, entry) {
     if (!entry || entry.status !== 'fulfilled') {
       console.warn(controlSourceProviderTitle(provider) + ' search failed:', entry && entry.reason);
       providerPages[provider] = Object.assign({}, providerPages[provider] || {}, { hasMore: false, failed: true });
@@ -1123,16 +1134,30 @@ async function fetchMusicSearchResults(q, mode, previousPages) {
     };
     songsByProvider[provider] = songs;
     if (value.message && !songs.length && !searchProviderNotice) searchProviderNotice = value.message;
+  }
+  var jobs = fetchProviders.map(function (provider) {
+    var previous = previousPages && previousPages[provider];
+    var offset = previous ? Math.max(0, Number(previous.nextOffset) || 0) : 0;
+    var limit = pageLimitByProvider[provider] || 12;
+    return apiJson(searchProviderUrl(provider, q, limit, offset), { timeoutMs: 5000 }).then(function (value) {
+      return { provider: provider, offset: offset, requestedLimit: limit, value: value || {} };
+    }).then(function (response) {
+      var entry = { status: 'fulfilled', value: response };
+      ingest(provider, entry);
+      if (typeof onPartial === 'function') {
+        try {
+          onPartial({ songs: mergeAll(), providerPages: providerPages, hasMore: searchProviderPagesHaveMore(providerPages), provider: provider });
+        } catch (e) { console.warn('search partial render failed:', e); }
+      }
+      return entry;
+    }, function (reason) {
+      var entry = { status: 'rejected', reason: reason };
+      ingest(provider, entry);
+      return entry;
+    });
   });
-  var songs = mergeSongSearchResults(
-    songsByProvider.netease,
-    songsByProvider.qq,
-    songsByProvider.kugou,
-    songsByProvider.qishui,
-    songsByProvider.spotify,
-    MUSIC_SEARCH_MAX_RESULTS,
-    q
-  );
+  await Promise.allSettled(jobs);
+  var songs = mergeAll();
   return { songs: songs, providerPages: providerPages, hasMore: searchProviderPagesHaveMore(providerPages) };
 }
 function searchSongResultHtml(s, i) {
@@ -1289,7 +1314,19 @@ async function doSearch(q, opts) {
   setSearchHistorySurface(false);
   try {
     var mode = searchMode;
-    var searchData = await fetchMusicSearchResults(q, mode);
+    var searchData = await fetchMusicSearchResults(q, mode, null, function (partial) {
+      if (requestSeq !== searchRequestSeq || searchMode !== mode || $input.value.trim() !== q) return;
+      if (!partial.songs || !partial.songs.length) return;
+      searchLastResultQuery = searchResultKey(q, mode);
+      pendingSearchProviderPages = {
+        key: searchLastResultQuery,
+        query: q,
+        mode: mode,
+        providerPages: partial.providerPages || {},
+        hasMore: !!partial.hasMore
+      };
+      renderSongSearchResults(partial.songs);
+    });
     var songs = searchData && Array.isArray(searchData.songs) ? searchData.songs : [];
     if (requestSeq !== searchRequestSeq || searchMode !== mode || $input.value.trim() !== q) return;
     if (!songs.length) {
