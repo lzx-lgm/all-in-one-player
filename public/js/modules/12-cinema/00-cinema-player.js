@@ -1,6 +1,10 @@
-/* Cinema — MV / 视频影院 (fork addition, v2.0.0).
-   Mineradio 没有的一块：原格式 · 原分辨率 · 不转码。
-   自包含模块：自己建 UI、自己接样式，不改 index.html 的布局。
+/* Cinema — 全能影院 (fork addition, v2.0.0; v2.0.3 影院重做)。
+   不再是浏览器播放器外观：自绘放映控制台（播控条/音量/进度/氛围光/放映单），
+   影院氛围光 + 跑马灯片名 + 胶片齿孔进度条。
+   声音走“影院专线”：桌面版把视频音频接进一条独立的 AudioContext（和音乐
+   一样的 Web Audio 通路、同一个输出设备），不再只依赖 <video> 元素自身
+   的输出——v2.0.2 的 setSinkId 修不好的无声问题，根子就在元素级输出上。
+   网页版因跨域 CORS 无法保证，走元素直出（行为与原来一致）。
    原理照 PotPlayer：自带解码兜底 + 字幕/音轨/A-B/逐帧/画面调节/截图/媒体信息；
    浏览器 <video> 解不了 AC3/DTS 等音频时，桌面版给「用系统播放器打开」兜底。
    防御式加载：任何一步出错都不应拖垮整站启动（index-loader 是串联加载）。 */
@@ -15,6 +19,9 @@
 
     var IS_DESKTOP = !!(window.desktopWindow && window.desktopWindow.isDesktop);
     var DW = window.desktopWindow || null;
+    /* 桌面版：所有远程视频都经本机 /api/video 代理（同源），本地是 blob；
+       同源才能安全接进 Web Audio，跨域没 CORS 会直接静音，所以网页版不走专线。 */
+    var USE_WEB_AUDIO = IS_DESKTOP;
 
     var DEMO_MVS = [
       { title: 'For Bigger Fun — 欢乐大片', artist: '演示 MV', plat: 'YouTube Music', src: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4' },
@@ -57,32 +64,50 @@
     /* ---------- styles (inline: no index.html edits) ---------- */
     var style = el('style');
     style.textContent = [
-      '.cin-btn{position:fixed;right:18px;bottom:18px;z-index:9990;padding:10px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:rgba(10,10,20,.85);color:#fff;font-size:14px;cursor:pointer;backdrop-filter:blur(8px)}',
-      '.cin-btn:hover{background:linear-gradient(135deg,#7c3aed,#06b6d4)}',
-      '.cin-overlay{position:fixed;inset:0;z-index:9991;background:rgba(0,0,0,.82);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px}',
-      '.cin-panel{width:min(1060px,96vw);background:#0d0d16;border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:16px;color:#eee;font-size:14px}',
-      '.cin-panel h2{margin:0 0 4px;font-size:17px}',
-      '.cin-panel .cin-sub{color:#9a9ab0;font-size:12.5px;margin-bottom:10px}',
-      '.cin-close{float:right;background:none;border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:4px 10px;cursor:pointer}',
-      '.cin-screen video{width:100%;max-height:58vh;background:#000;border-radius:10px;display:block}',
+      '.cin-btn{position:fixed;right:18px;bottom:18px;z-index:9990;padding:11px 18px;border-radius:999px;border:1px solid rgba(167,139,250,.55);background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 6px 24px rgba(124,58,237,.45)}',
+      '.cin-btn:hover{filter:brightness(1.12)}',
+      '.cin-overlay{position:fixed;inset:0;z-index:9991;background:radial-gradient(1200px 600px at 50% -10%,rgba(124,58,237,.28),transparent 60%),radial-gradient(900px 500px at 85% 110%,rgba(6,182,212,.18),transparent 60%),rgba(2,2,8,.94);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:22px 12px 40px}',
+      '.cin-panel{width:min(1060px,96vw);background:linear-gradient(180deg,#14101f,#0b0b14);border:1px solid rgba(167,139,250,.35);border-radius:18px;padding:18px 18px 14px;color:#eee;font-size:14px;box-shadow:0 24px 80px rgba(0,0,0,.6)}',
+      '.cin-close{float:right;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:4px 10px;cursor:pointer}',
+      '.cin-marquee{overflow:hidden;white-space:nowrap;border-bottom:1px solid rgba(167,139,250,.3);padding:2px 0 8px;margin-bottom:12px}',
+      '.cin-marquee span{display:inline-block;padding-left:100%;animation:cin-marquee 26s linear infinite;font-size:16px;font-weight:600;letter-spacing:1px;color:#e9e4ff}',
+      '@keyframes cin-marquee{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}',
+      '.cin-screenwrap{position:relative;border-radius:14px;overflow:hidden;background:#000;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 18px 60px rgba(124,58,237,.25)}',
+      '.cin-ambient{position:absolute;inset:-40px;z-index:0;width:calc(100% + 80px);height:calc(100% + 80px);object-fit:cover;filter:blur(64px) saturate(1.6);opacity:.55;pointer-events:none}',
+      '.cin-screen{position:relative;z-index:1}',
+      '.cin-screen video{width:100%;max-height:56vh;background:#000;display:block}',
+      '.cin-console{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;padding:10px 12px;border:1px solid rgba(167,139,250,.3);border-radius:12px;background:rgba(255,255,255,.05)}',
+      '.cin-cbtn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:8px;padding:7px 11px;cursor:pointer;font-size:13px;white-space:nowrap}',
+      '.cin-cbtn:hover{border-color:#22d3ee}',
+      '.cin-cbtn.on{background:#7c3aed;border-color:#22d3ee}',
+      '.cin-cbtn.main{background:linear-gradient(135deg,#7c3aed,#06b6d4);border-color:transparent;font-weight:600;padding:7px 16px}',
+      '.cin-seek{flex:1;min-width:140px;appearance:none;-webkit-appearance:none;height:12px;border-radius:6px;outline:none;cursor:pointer;background:repeating-linear-gradient(90deg,#3a2f5e 0 10px,#241d3d 10px 22px);border:1px solid rgba(167,139,250,.4)}',
+      '.cin-seek::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#22d3ee;border:2px solid #fff;box-shadow:0 0 10px rgba(34,211,238,.8)}',
+      '.cin-seek::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#22d3ee;border:2px solid #fff}',
+      '.cin-vol{width:90px;appearance:none;-webkit-appearance:none;height:6px;border-radius:3px;background:rgba(255,255,255,.25);outline:none;cursor:pointer}',
+      '.cin-vol::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#a78bfa;border:2px solid #fff}',
+      '.cin-vol::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:#a78bfa;border:2px solid #fff}',
+      '.cin-time{font-size:12.5px;color:#c9c9dd;white-space:nowrap;font-variant-numeric:tabular-nums}',
       '.cin-meta{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}',
       '.cin-chip{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:4px 10px;font-size:12.5px;color:#c9c9dd}',
       '.cin-chip b{color:#fff}',
-      '.cin-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}',
-      '.cin-tbtn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}',
-      '.cin-tbtn.on{background:#7c3aed;border-color:#22d3ee}',
+      '.cin-diag{margin:6px 0;padding:9px 12px;border:1px dashed rgba(34,211,238,.45);border-radius:10px;font-size:12.5px;line-height:1.7;color:#b9f3ff;background:rgba(6,182,212,.06);white-space:pre-wrap}',
+      '.cin-diag b{color:#fff}',
       '.cin-pro{display:flex;gap:14px;flex-wrap:wrap;align-items:center;border-top:1px solid rgba(255,255,255,.12);padding-top:10px;margin-top:10px;font-size:13px}',
       '.cin-pro b{color:#fff}',
+      '.cin-tbtn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}',
+      '.cin-tbtn.on{background:#7c3aed;border-color:#22d3ee}',
       '.cin-note{color:#9a9ab0;font-size:12px}',
       '.cin-info{margin-top:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.16);border-radius:10px;font-size:12.5px;line-height:1.8;color:#b9b9cc;white-space:pre-wrap}',
       '.cin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:10px}',
       '.cin-item{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;overflow:hidden;cursor:pointer;text-align:left;padding:0;color:#eee}',
+      '.cin-item.playing{border-color:#22d3ee;box-shadow:0 0 0 1px #22d3ee,0 0 18px rgba(34,211,238,.35)}',
       '.cin-item video{width:100%;height:96px;object-fit:cover;display:block;background:#000}',
       '.cin-item .mi{padding:8px}',
       '.cin-item .mi b{display:block;font-size:13px}',
       '.cin-item .mi span{font-size:12px;color:#9a9ab0}',
-      '.cin-drop{margin-top:12px;border:1px dashed rgba(255,255,255,.3);border-radius:10px;padding:14px;text-align:center;color:#b9b9cc;font-size:13px}',
-      '.cin-drop.drag{border-color:#7a7af0;background:rgba(90,90,214,.12)}',
+      '.cin-drop{margin-top:12px;border:1px dashed rgba(167,139,250,.5);border-radius:10px;padding:14px;text-align:center;color:#b9b9cc;font-size:13px}',
+      '.cin-drop.drag{border-color:#22d3ee;background:rgba(34,211,238,.1)}',
       '.cin-urlrow{display:flex;gap:8px;margin-top:10px}',
       '.cin-urlrow input{flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:8px;color:#fff;padding:8px 10px;font-size:13px}',
       '.cin-hidden{display:none!important}',
@@ -90,35 +115,43 @@
     document.head.appendChild(style);
 
     /* ---------- DOM ---------- */
-    var openBtn = el('button', 'cin-btn', '🎬 影院');
-    openBtn.title = 'MV / 视频影院：原格式 · 原分辨率 · 不转码';
+    var openBtn = el('button', 'cin-btn', '🎬 全能影院');
+    openBtn.title = '全能影院：原格式 · 原分辨率 · 不转码';
     document.body.appendChild(openBtn);
 
     var overlay = el('div', 'cin-overlay cin-hidden');
     var panel = el('div', 'cin-panel');
     panel.innerHTML =
       '<button class="cin-close" id="cinClose">✕ 关闭</button>' +
-      '<h2>MV / 视频影院</h2>' +
-      '<div class="cin-sub">原格式 · 原分辨率 · 不转码 — 全能播放器独有。本地视频只在本机播放，不上传。</div>' +
-      '<div class="cin-screen"><video id="cinVideo" controls playsinline preload="metadata"></video></div>' +
+      '<div class="cin-marquee"><span id="cinTitle">全能影院 — 还没选片，点下面的放映单，或拖入自己的视频</span></div>' +
+      '<div class="cin-screenwrap"><video id="cinAmbientVideo" class="cin-ambient" muted playsinline preload="metadata"></video>' +
+      '<div class="cin-screen"><video id="cinVideo" playsinline preload="metadata"></video></div></div>' +
+      '<div class="cin-console">' +
+      '<button class="cin-cbtn" id="cinPrevBtn" title="上一部">⏮</button>' +
+      '<button class="cin-cbtn main" id="cinPlayBtn">▶ 播放</button>' +
+      '<button class="cin-cbtn" id="cinNextBtn" title="下一部">⏭</button>' +
+      '<input type="range" class="cin-seek" id="cinSeek" min="0" max="1000" value="0" title="进度（胶片齿孔条，点一下就跳）">' +
+      '<span class="cin-time" id="cinMetaTime">00:00 / 00:00</span>' +
+      '<button class="cin-cbtn" id="cinMuteBtn" title="静音">🔊</button>' +
+      '<input type="range" class="cin-vol" id="cinVolSlider" min="0" max="100" value="100" title="影院音量">' +
+      '<select id="cinSpeedSel" class="cin-cbtn" title="视频倍速"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1.0× 倍速</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option></select>' +
+      '<button class="cin-cbtn on" id="cinOrigBtn">原始分辨率直通</button>' +
+      '<button class="cin-cbtn" id="cinNativeBtn">1:1 原生尺寸</button>' +
+      '<button class="cin-cbtn" id="cinAmbientBtn" title="氛围光开关">✨ 氛围光</button>' +
+      '<button class="cin-cbtn" id="cinFsBtn">⛶ 全屏</button>' +
+      '<button class="cin-cbtn" id="cinPipBtn">画中画</button>' +
+      '</div>' +
       '<div class="cin-meta">' +
       '<span class="cin-chip">原始分辨率 <b id="cinMetaRes">—</b></span>' +
       '<span class="cin-chip">原始格式 <b id="cinMetaFmt">—</b></span>' +
       '<span class="cin-chip">来源 <b id="cinMetaSrc">—</b></span>' +
+      '<span class="cin-chip">画质 <b id="cinQualitySel">原始（源文件）</b></span>' +
       '<span class="cin-chip">处理 <b>不转码 · 不压缩 · 不裁切</b></span>' +
-      '<span class="cin-chip">时间 <b id="cinMetaTime">—</b></span>' +
       '</div>' +
-      '<div class="cin-bar">' +
-      '<span id="cinTitle" style="flex:1;min-width:160px">还没选片 — 点下面的演示 MV，或拖入自己的视频</span>' +
-      '<button class="cin-tbtn on" id="cinOrigBtn">原始分辨率直通</button>' +
-      '<button class="cin-tbtn" id="cinNativeBtn">1:1 原生尺寸</button>' +
-      '<button class="cin-tbtn" id="cinFsBtn">⛶ 全屏</button>' +
-      '<button class="cin-tbtn" id="cinPipBtn">画中画</button>' +
-      '<button class="cin-tbtn" id="cinPlayBtn">▶ 播放</button>' +
-      '<select id="cinSpeedSel" class="cin-tbtn" title="视频倍速"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1.0× 倍速</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2.0×</option></select>' +
-      '<span class="cin-tbtn" id="cinQualitySel" style="cursor:default">画质 · 原始（源文件）</span>' +
-      '</div>' +
-      '<div class="cin-pro">' +
+      '<div class="cin-diag" id="cinDiag">声音诊断：还没播放。播起来后这里会实时显示静音/音量/已解码音频/输出设备 — 视频没声就截这张图给我。</div>' +
+      '<div style="margin-top:6px"><button class="cin-tbtn" id="cinToneBtn">🔔 播一声测试音</button> <button class="cin-tbtn" id="cinResetOutBtn">恢复默认输出设备</button> <span class="cin-note">测试音走影院同一条声音专线：听见蜂鸣 = 输出通路正常，问题在片源音频；听不见 = 输出设备/通路有问题。</span></div>' +
+      '<div style="margin-top:12px"><button class="cin-tbtn" id="cinProToggle">🎛 放映控制 ▾</button></div>' +
+      '<div class="cin-pro cin-hidden" id="cinProRow">' +
       '<span><b>字幕</b> <button class="cin-tbtn" id="cinSubBtn">加载字幕文件</button><input type="file" id="cinSubFile" accept=".srt,.vtt,.ass,.ssa" class="cin-hidden"><span class="cin-note" id="cinSubState">未加载</span></span>' +
       '<span><b>音轨</b> <select id="cinAudioTrackSel" class="cin-tbtn" title="多音轨视频切换音轨"><option value="">单音轨</option></select></span>' +
       '<span><b>A-B 循环</b> <button class="cin-tbtn" id="cinAbABtn">设 A 点</button><button class="cin-tbtn" id="cinAbBBtn">设 B 点</button><button class="cin-tbtn" id="cinAbClearBtn">取消</button><span class="cin-note" id="cinAbState"></span></span>' +
@@ -131,16 +164,24 @@
       '<div class="cin-urlrow"><input id="cinUrlInput" type="text" placeholder="粘贴视频直链（MP4 / WebM…）后点播放"><button class="cin-tbtn" id="cinUrlBtn">播这个链接</button></div>' +
       '<div class="cin-drop" id="cinDropZone">把你自己的视频拖到这里，直接原画播放 <button class="cin-tbtn" id="cinPickBtn" style="margin-left:8px">选择文件</button><input type="file" id="cinLocalFile" accept="video/*,.mkv,.avi,.mov" class="cin-hidden"></div>' +
       '<div class="cin-note" id="cinLocalMeta" style="margin-top:8px"></div>' +
-      '<h3 style="margin:14px 0 0;font-size:14px">演示 MV</h3>' +
+      '<h3 style="margin:14px 0 0;font-size:14px">🎞 今晚放映单 <span class="cin-note">— 点一部就放，放完自动接下一部</span></h3>' +
       '<div class="cin-grid" id="cinMvGrid"></div>';
     overlay.appendChild(panel);
     document.body.appendChild(overlay);
 
     var video = $('cinVideo');
+    var ambientVideo = $('cinAmbientVideo');
     var status = $('cinLocalMeta');
+    var diag = $('cinDiag');
     var currentLocalFile = null, currentLocalFilePath = '', localVideoURL = null;
     var abA = null, abB = null, subTrackEl = null, currentFps = 30;
     var videoAudioTimer = null, videoAudioCheckedSrc = '';
+    var currentQueueIndex = -1, seeking = false, cinemaVolume = 1;
+    var diagTimer = null;
+    /* 影院声音专线：独立 AudioContext，只归影院管，音乐那边的图谱重建碰不到它。
+       视频一旦接进 MediaElementSource，声音就只走这条线（元素自身的输出被接管），
+       所以专线断了要如实报出来，不能悄悄回落到“以为有声”的状态。 */
+    var videoCtx = null, videoSource = null, videoGain = null, videoAudioPath = '未建立';
 
     function toast(msg) { status.textContent = msg; }
     function pauseHostAudio() {
@@ -148,16 +189,77 @@
         if (typeof audio !== 'undefined' && audio && !audio.paused) audio.pause();
       } catch (e) {}
     }
+    function currentOutputDeviceId() {
+      try {
+        if (typeof audioOutputDeviceId !== 'undefined') return audioOutputDeviceId || '';
+      } catch (e) {}
+      return '';
+    }
     /* 视频跟音乐走同一个输出设备：音乐经 setSinkId 选了输出口，视频默认只走系统默认口，
-       两边设备不一致时就会出现“音乐有声、视频没声”。这里让视频每次加载/播放都跟随同一选择。 */
+       两边设备不一致时就会出现“音乐有声、视频没声”。元素级 setSinkId（v2.0.2）+ 专线
+       AudioContext 级 setSinkId（v2.0.3）两边都跟随同一选择。 */
     function applyCinemaOutputDevice() {
+      var id = currentOutputDeviceId();
       try {
         if (video && typeof video.setSinkId === 'function') {
-          var id = (typeof audioOutputDeviceId !== 'undefined') ? (audioOutputDeviceId || '') : '';
           var p = video.setSinkId(id);
           if (p && p.catch) p.catch(function () {});
         }
       } catch (e) {}
+      try {
+        if (videoCtx && typeof videoCtx.setSinkId === 'function') {
+          var p2 = videoCtx.setSinkId(id);
+          if (p2 && p2.catch) p2.catch(function () {});
+        }
+      } catch (e) {}
+    }
+    /* 把视频音频接进影院专线：和音乐一样的 Web Audio 通路。只在桌面版做
+       （同源：代理或 blob；网页版跨域没 CORS 会直接静音，宁可不走）。 */
+    function ensureVideoAudioPath() {
+      if (!USE_WEB_AUDIO) { videoAudioPath = '元素直出（网页版）'; return false; }
+      if (videoCtx && videoCtx.state === 'closed') { videoCtx = null; videoSource = null; videoGain = null; }
+      if (videoSource) return true;
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) { videoAudioPath = '元素直出（无 AudioContext）'; return false; }
+        if (!videoCtx) videoCtx = new AC();
+        if (videoCtx.state === 'suspended') videoCtx.resume().catch(function () {});
+        videoGain = videoCtx.createGain();
+        videoGain.gain.value = cinemaVolume;
+        videoGain.connect(videoCtx.destination);
+        videoSource = videoCtx.createMediaElementSource(video);
+        videoSource.connect(videoGain);
+        applyCinemaOutputDevice();
+        videoAudioPath = 'Web Audio 影院专线';
+        return true;
+      } catch (e) {
+        videoSource = null; videoGain = null;
+        videoAudioPath = '专线建立失败 → 元素直出（' + (e && e.message ? e.message : '未知原因') + '）';
+        return false;
+      }
+    }
+    function updateDiag() {
+      try {
+        var dec = null;
+        try { dec = video.webkitAudioDecodedByteCount; } catch (e) {}
+        var sink = currentOutputDeviceId();
+        diag.textContent =
+          '声音诊断：' + (video.paused ? '已暂停' : '播放中') +
+          ' · 静音=' + (video.muted ? '是' : '否') +
+          ' · 音量=' + Math.round((video.volume == null ? 1 : video.volume) * 100) + '%' +
+          ' · 已解码音频=' + (dec == null ? '未知' : dec + ' 字节' + (dec === 0 && !video.paused ? '（0 = 片源无声或编码不受支持）' : '')) +
+          '\n声音通路：' + videoAudioPath +
+          ' · 输出设备：' + (sink ? '已选设备（id ' + String(sink).slice(0, 12) + '…）' : '系统默认') +
+          (video.audioTracks && video.audioTracks.length > 1 ? ' · 音轨数=' + video.audioTracks.length : '');
+      } catch (e) {}
+    }
+    function startDiagTimer() {
+      stopDiagTimer();
+      updateDiag();
+      diagTimer = setInterval(updateDiag, 1000);
+    }
+    function stopDiagTimer() {
+      if (diagTimer) { clearInterval(diagTimer); diagTimer = null; }
     }
     function resetVideoPro() {
       abA = null; abB = null;
@@ -186,6 +288,16 @@
         } catch (e) {}
       }, 3000);
     }
+    function markQueuePlaying(idx) {
+      currentQueueIndex = idx;
+      var items = grid.children;
+      for (var i = 0; i < items.length; i++) items[i].classList.toggle('playing', i === idx);
+    }
+    function playQueueItem(idx) {
+      if (idx < 0 || idx >= DEMO_MVS.length) return;
+      loadRemote(DEMO_MVS[idx]);
+      markQueuePlaying(idx);
+    }
 
     function loadRemote(mv) {
       if (localVideoURL) { URL.revokeObjectURL(localVideoURL); localVideoURL = null; }
@@ -193,14 +305,18 @@
       $('cinOpenExtBtn').classList.add('cin-hidden');
       resetVideoPro();
       video.muted = false;
+      video.volume = cinemaVolume;
+      ensureVideoAudioPath();
       applyCinemaOutputDevice();
-      video.src = proxiedVideoUrl(mv.src);
-      $('cinTitle').textContent = mv.title + ' — ' + mv.artist;
+      var u = proxiedVideoUrl(mv.src);
+      video.src = u;
+      try { ambientVideo.src = u; } catch (e) {}
+      $('cinTitle').textContent = '正在放映 · ' + mv.title + ' — ' + mv.artist;
       $('cinMetaFmt').textContent = extOf(mv.src);
       $('cinMetaSrc').textContent = '演示 MV · ' + mv.plat;
       $('cinMetaRes').textContent = '读取中…';
       status.textContent = '';
-      video.play().then(function () { toast('正在原画播放：' + mv.title); checkVideoAudio(); })
+      video.play().then(function () { toast('正在原画播放：' + mv.title); checkVideoAudio(); startDiagTimer(); })
         .catch(function () { toast('点 ▶ 播放按钮开始播放'); });
       pauseHostAudio();
     }
@@ -215,43 +331,69 @@
       $('cinOpenExtBtn').classList.toggle('cin-hidden', !(IS_DESKTOP && currentLocalFilePath));
       resetVideoPro();
       video.muted = false;
+      video.volume = cinemaVolume;
+      ensureVideoAudioPath();
       applyCinemaOutputDevice();
       video.src = localVideoURL;
-      $('cinTitle').textContent = f.name + ' — 本地视频';
+      try { ambientVideo.src = localVideoURL; } catch (e) {}
+      markQueuePlaying(-1);
+      $('cinTitle').textContent = '正在放映 · ' + f.name + ' — 本地视频';
       $('cinMetaFmt').textContent = ext;
       $('cinMetaSrc').textContent = '本地文件';
       $('cinMetaRes').textContent = '读取中…';
       status.textContent = '已导入：' + f.name + ' · ' + ext + ' · ' + fileSizeMB(f) + ' · 正在读取原始分辨率…（文件只在本机浏览器里播放，不上传）';
-      video.play().then(function () { toast('本地视频原画播放中：' + f.name); checkVideoAudio(); })
+      video.play().then(function () { toast('本地视频原画播放中：' + f.name); checkVideoAudio(); startDiagTimer(); })
         .catch(function () { toast('点 ▶ 播放本地视频'); });
       pauseHostAudio();
     }
 
-    /* ---------- demo MV grid ---------- */
+    /* ---------- 放映单 ---------- */
     var grid = $('cinMvGrid');
-    DEMO_MVS.forEach(function (mv) {
+    DEMO_MVS.forEach(function (mv, idx) {
       var b = el('button', 'cin-item');
       b.innerHTML = '<video muted preload="metadata" src="' + esc(mv.src) + '#t=1"></video>' +
-        '<div class="mi"><b>' + esc(mv.title) + '</b><span>' + esc(mv.artist) + ' · ' + esc(mv.plat) + '</span></div>';
-      b.onclick = function () { loadRemote(mv); };
+        '<div class="mi"><b>' + (idx + 1) + '. ' + esc(mv.title) + '</b><span>' + esc(mv.artist) + ' · ' + esc(mv.plat) + '</span></div>';
+      b.onclick = function () { playQueueItem(idx); };
       grid.appendChild(b);
     });
 
-    /* ---------- transport & display ---------- */
+    /* ---------- 视频事件 ---------- */
     video.addEventListener('timeupdate', function () {
-      if (video.duration) $('cinMetaTime').textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration);
+      if (video.duration) {
+        $('cinMetaTime').textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration);
+        if (!seeking) $('cinSeek').value = Math.round(video.currentTime / video.duration * 1000);
+      }
       if (abA !== null && abB !== null && !video.paused && video.currentTime >= abB) video.currentTime = abA;
+      try {
+        if (ambientVideo && !ambientVideo.classList.contains('cin-hidden') && !ambientVideo.paused && Math.abs(ambientVideo.currentTime - video.currentTime) > 0.6) ambientVideo.currentTime = video.currentTime;
+      } catch (e) {}
     });
     video.addEventListener('play', function () {
       $('cinPlayBtn').textContent = '⏸ 暂停';
       pauseHostAudio();
+      ensureVideoAudioPath();
       applyCinemaOutputDevice();
+      startDiagTimer();
+      try { if (!ambientVideo.classList.contains('cin-hidden')) { var ap = ambientVideo.play(); if (ap && ap.catch) ap.catch(function () {}); } } catch (e) {}
       if (video.currentSrc !== videoAudioCheckedSrc) checkVideoAudio();
     });
-    video.addEventListener('pause', function () { $('cinPlayBtn').textContent = '▶ 播放'; });
+    video.addEventListener('pause', function () {
+      $('cinPlayBtn').textContent = '▶ 播放';
+      stopDiagTimer(); updateDiag();
+      try { ambientVideo.pause(); } catch (e) {}
+    });
+    video.addEventListener('ended', function () {
+      stopDiagTimer();
+      if (currentQueueIndex >= 0 && currentQueueIndex < DEMO_MVS.length - 1) {
+        toast('下一部：' + DEMO_MVS[currentQueueIndex + 1].title);
+        playQueueItem(currentQueueIndex + 1);
+      } else if (currentQueueIndex >= 0) {
+        toast('放映单播完了 — 再点一部，或拖入自己的视频');
+      }
+    });
     video.addEventListener('loadedmetadata', function () {
       if (video.videoWidth) $('cinMetaRes').textContent = video.videoWidth + ' × ' + video.videoHeight + ' · 原始';
-      $('cinQualitySel').textContent = '画质 · 原始 ' + video.videoWidth + '×' + video.videoHeight + '（源文件 · 不转码）';
+      $('cinQualitySel').textContent = '原始 ' + video.videoWidth + '×' + video.videoHeight + '（源文件 · 不转码）';
       var sel = $('cinAudioTrackSel');
       sel.innerHTML = '';
       var tracks = video.audioTracks;
@@ -271,10 +413,42 @@
         toast('本地文件编码不受当前浏览器支持，见下方说明');
       }
     }, true);
+
+    /* ---------- 放映控制台 ---------- */
     $('cinPlayBtn').onclick = function () { if (video.paused) video.play(); else video.pause(); };
+    $('cinPrevBtn').onclick = function () {
+      if (currentQueueIndex > 0) playQueueItem(currentQueueIndex - 1);
+      else toast('已经是放映单第一部');
+    };
+    $('cinNextBtn').onclick = function () {
+      if (currentQueueIndex >= 0 && currentQueueIndex < DEMO_MVS.length - 1) playQueueItem(currentQueueIndex + 1);
+      else if (currentQueueIndex < 0) playQueueItem(0);
+      else toast('已经是放映单最后一部');
+    };
+    $('cinSeek').addEventListener('input', function () {
+      seeking = true;
+      if (video.duration) $('cinMetaTime').textContent = fmt(this.value / 1000 * video.duration) + ' / ' + fmt(video.duration);
+    });
+    $('cinSeek').addEventListener('change', function () {
+      seeking = false;
+      if (video.duration) video.currentTime = this.value / 1000 * video.duration;
+    });
+    $('cinVolSlider').addEventListener('input', function () {
+      cinemaVolume = this.value / 100;
+      video.volume = cinemaVolume;
+      video.muted = false;
+      if (videoGain) { try { videoGain.gain.value = cinemaVolume; } catch (e) {} }
+      $('cinMuteBtn').textContent = cinemaVolume === 0 ? '🔇' : '🔊';
+      updateDiag();
+    });
+    $('cinMuteBtn').onclick = function () {
+      video.muted = !video.muted;
+      this.textContent = video.muted ? '🔇' : '🔊';
+      updateDiag();
+    };
     $('cinSpeedSel').onchange = function () { video.playbackRate = parseFloat(this.value); toast('视频倍速 ' + this.value + '×'); };
     $('cinOrigBtn').onclick = function () {
-      video.style.width = ''; video.style.maxHeight = '58vh';
+      video.style.width = ''; video.style.maxHeight = '56vh';
       this.classList.add('on'); $('cinNativeBtn').classList.remove('on');
       toast('原始分辨率直通：自适应屏幕完整显示，不裁切、不转码');
     };
@@ -284,8 +458,15 @@
       this.classList.add('on'); $('cinOrigBtn').classList.remove('on');
       toast('1:1 原生尺寸：按源文件像素尺寸显示（超出屏幕时以屏幕为界）');
     };
+    $('cinAmbientBtn').onclick = function () {
+      var hidden = ambientVideo.classList.toggle('cin-hidden');
+      this.classList.toggle('on', !hidden);
+      if (!hidden && !video.paused) { try { var ap = ambientVideo.play(); if (ap && ap.catch) ap.catch(function () {}); } catch (e) {} }
+      else { try { ambientVideo.pause(); } catch (e) {} }
+      toast(hidden ? '氛围光已关' : '氛围光已开：画面颜色会漫到整个影厅');
+    };
     $('cinFsBtn').onclick = function () {
-      var target = video.closest('.cin-screen') || video;
+      var target = video.closest('.cin-screenwrap') || video;
       if (target.requestFullscreen) target.requestFullscreen().catch(function () { toast('当前浏览器不允许全屏'); });
       else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
       else toast('当前浏览器不支持全屏');
@@ -294,6 +475,39 @@
       if (document.pictureInPictureElement) document.exitPictureInPicture();
       else if (video.requestPictureInPicture) video.requestPictureInPicture().catch(function () { toast('当前浏览器不支持画中画，或视频还没开始播'); });
       else toast('当前浏览器不支持画中画');
+    };
+    $('cinToneBtn').onclick = function () {
+      ensureVideoAudioPath();
+      var ctx = videoCtx;
+      var dest = videoGain || (ctx && ctx.destination);
+      if (!ctx) {
+        try { ctx = new (window.AudioContext || window.webkitAudioContext)(); dest = ctx.destination; } catch (e) {}
+      }
+      if (!ctx) { toast('播不了测试音：没有 AudioContext'); return; }
+      try {
+        if (ctx.state === 'suspended') ctx.resume().catch(function () {});
+        var t = ctx.currentTime + 0.02;
+        var osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.25, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+        osc.connect(g); g.connect(dest);
+        osc.start(t); osc.stop(t + 0.65);
+        toast('测试音已播（880Hz，0.6 秒）— 听见了就是通路正常');
+      } catch (e) { toast('测试音播失败：' + (e && e.message ? e.message : '')); }
+    };
+    $('cinResetOutBtn').onclick = function () {
+      try { localStorage.removeItem('mineradio-audio-output-device-v1'); } catch (e) {}
+      try { audioOutputDeviceId = ''; } catch (e) {}
+      applyCinemaOutputDevice();
+      updateDiag();
+      toast('已恢复系统默认输出设备 — 再播一次视频试试');
+    };
+    $('cinProToggle').onclick = function () {
+      var row = $('cinProRow');
+      var hidden = row.classList.toggle('cin-hidden');
+      this.textContent = hidden ? '🎛 放映控制 ▾' : '🎛 放映控制 ▴';
     };
 
     /* ---------- PotPlayer-style pro controls ---------- */
@@ -446,6 +660,7 @@
       var u = ($('cinUrlInput').value || '').trim();
       if (!u) { toast('先粘贴一个视频直链'); return; }
       loadRemote({ title: u.split('/').pop() || u, artist: '链接', plat: '直链', src: u });
+      markQueuePlaying(-1);
     };
     $('cinPickBtn').onclick = function () { $('cinLocalFile').click(); };
     $('cinLocalFile').addEventListener('change', function () { loadLocalFile(this.files[0]); this.value = ''; });
@@ -462,20 +677,22 @@
     });
 
     /* ---------- open / close ---------- */
-    openBtn.onclick = function () { overlay.classList.remove('cin-hidden'); };
+    openBtn.onclick = function () { overlay.classList.remove('cin-hidden'); updateDiag(); };
     $('cinClose').onclick = function () {
       overlay.classList.add('cin-hidden');
+      stopDiagTimer();
       try { video.pause(); } catch (e) {}
     };
     overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) { overlay.classList.add('cin-hidden'); try { video.pause(); } catch (e2) {} }
+      if (e.target === overlay) { overlay.classList.add('cin-hidden'); stopDiagTimer(); try { video.pause(); } catch (e2) {} }
     });
 
     window.__cinema = {
-      open: function () { overlay.classList.remove('cin-hidden'); },
-      close: function () { overlay.classList.add('cin-hidden'); try { video.pause(); } catch (e) {} },
-      playUrl: function (u) { overlay.classList.remove('cin-hidden'); loadRemote({ title: u, artist: '链接', plat: '直链', src: u }); },
+      open: function () { overlay.classList.remove('cin-hidden'); updateDiag(); },
+      close: function () { overlay.classList.add('cin-hidden'); stopDiagTimer(); try { video.pause(); } catch (e) {} },
+      playUrl: function (u) { overlay.classList.remove('cin-hidden'); loadRemote({ title: u, artist: '链接', plat: '直链', src: u }); markQueuePlaying(-1); },
       playLocal: loadLocalFile,
+      playQueue: playQueueItem,
     };
   }
 })();
