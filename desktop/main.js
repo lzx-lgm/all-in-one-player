@@ -132,6 +132,12 @@ const QQ_LOGIN_FALLBACK_URL = 'https://y.qq.com/';
 const KUGOU_LOGIN_PARTITION = 'persist:mineradio-kugou-login';
 const KUGOU_LOGIN_URL = 'https://www.kugou.com/';
 const KUGOU_LOGIN_WARMUP_URL = 'https://www.kugou.com/newuc/user/uc/type=edit';
+// Fork addition (v2.0.3): Kuwo + YouTube Music login windows. Own partitions so
+// neither session can leak into (or be confused with) the QQ/WeChat identities.
+const KUWO_LOGIN_PARTITION = 'persist:all-in-one-kuwo-login';
+const KUWO_LOGIN_URL = 'https://www.kuwo.cn/';
+const YTMUSIC_LOGIN_PARTITION = 'persist:all-in-one-ytmusic-login';
+const YTMUSIC_LOGIN_URL = 'https://music.youtube.com/';
 const SPOTIFY_LOGIN_PARTITION = 'persist:mineradio-spotify-login';
 const SPOTIFY_OAUTH_TIMEOUT_MS = 3 * 60 * 1000;
 
@@ -2529,6 +2535,84 @@ async function readKugouLoginCookieHeader(cookieSession) {
   return buildCookieHeaderFor(cookies, isKugouCookieDomain, KUGOU_LOGIN_COOKIE_PRIORITY);
 }
 
+// ---- Kuwo + YouTube Music login windows (fork addition, v2.0.3) ----
+
+function isKuwoCookieDomain(domain) {
+  const normalized = String(domain || '').replace(/^\./, '').toLowerCase();
+  return normalized === 'kuwo.cn' || normalized.endsWith('.kuwo.cn');
+}
+
+async function readKuwoLoginCookieHeader(cookieSession) {
+  const cookies = await cookieSession.cookies.get({});
+  return buildCookieHeaderFor(cookies, isKuwoCookieDomain);
+}
+
+// Kuwo login-shaped cookie check (GUESS — the real session-cookie name was
+// never published; see kuwo-api.js probeKuwoVip). Kuwo's web client stores
+// the signed-in user id under `userid` (and some builds use `token`); the
+// self-generated `kw_token` CSRF token is NOT a login credential and is
+// deliberately ignored here. The server-side VIP probe is the real gate:
+// the window only decides when to hand the cookie over.
+function kuwoCookieHasLogin(cookieText) {
+  const obj = parseCookieHeader(cookieText);
+  return !!(obj.userid || obj.userId || obj.token || obj.access_token);
+}
+
+function isTrustedKuwoLoginUrl(targetUrl) {
+  try {
+    const parsed = new URL(String(targetUrl || ''));
+    if (parsed.protocol !== 'https:') return false;
+    const hostname = parsed.hostname.toLowerCase();
+    return ['kuwo.cn'].some((domain) => hostname === domain || hostname.endsWith('.' + domain));
+  } catch (_) {
+    return false;
+  }
+}
+
+function isYtmusicCookieDomain(domain) {
+  const normalized = String(domain || '').replace(/^\./, '').toLowerCase();
+  return normalized === 'youtube.com' || normalized.endsWith('.youtube.com') ||
+    normalized === 'google.com' || normalized.endsWith('.google.com');
+}
+
+const YTMUSIC_LOGIN_COOKIE_PRIORITY = [
+  'SID', '__Secure-3PSID', 'SAPISID', '__Secure-1PSID',
+  'HSID', 'SSID', 'APISID', 'LOGIN_INFO',
+];
+
+async function readYtmusicLoginCookieHeader(cookieSession) {
+  const cookies = await cookieSession.cookies.get({});
+  return buildCookieHeaderFor(cookies, isYtmusicCookieDomain, YTMUSIC_LOGIN_COOKIE_PRIORITY);
+}
+
+// YouTube Music login check (conservative heuristic, not a server proof):
+// a signed-in Google session carries SID plus SAPISID / __Secure-3PSID.
+// Cookie presence is what the server reports as logged in; the personal
+// library behind that cookie is still UNVERIFIED — never claim it works.
+function ytmusicCookieHasLogin(cookieText) {
+  const obj = parseCookieHeader(cookieText);
+  return !!(obj.SID && (obj.SAPISID || obj['__Secure-3PSID']));
+}
+
+function isTrustedYtmusicLoginUrl(targetUrl) {
+  try {
+    const parsed = new URL(String(targetUrl || ''));
+    if (parsed.protocol !== 'https:') return false;
+    const hostname = parsed.hostname.toLowerCase();
+    return [
+      'youtube.com',
+      'music.youtube.com',
+      'google.com',
+      'accounts.google.com',
+      'gstatic.com',
+      'googleusercontent.com',
+      'youtube-nocookie.com',
+    ].some((domain) => hostname === domain || hostname.endsWith('.' + domain));
+  } catch (_) {
+    return false;
+  }
+}
+
 async function openNeteaseMusicLoginWindow(owner) {
   const cookieSession = session.fromPartition(NETEASE_LOGIN_PARTITION);
   const initialCookie = await readNeteaseLoginCookieHeader(cookieSession);
@@ -2975,6 +3059,201 @@ async function openKugouMusicLoginWindow(owner, options) {
 
 async function clearKugouMusicLoginSession() {
   const cookieSession = session.fromPartition(KUGOU_LOGIN_PARTITION);
+  await cookieSession.clearStorageData({
+    storages: ['cookies', 'localstorage', 'indexdb', 'cachestorage'],
+  });
+  return { ok: true };
+}
+
+// Generic official-page login window (fork addition, v2.0.3), mirroring the
+// QQ/NetEase windows: own partition, 1200ms cookie poll, popups stay in the
+// same partition, everything else opens externally. cfg:
+//   partition, url, title, hasLogin(cookieText), closeHasLogin(cookieText),
+//   isTrustedUrl(url), readCookieHeader(session), closeMessage
+async function openOfficialLoginWindow(owner, cfg) {
+  const cookieSession = session.fromPartition(cfg.partition);
+  const initialCookie = await cfg.readCookieHeader(cookieSession);
+  if (cfg.hasLogin(initialCookie)) {
+    return { ok: true, cookie: initialCookie, reused: true };
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let pollTimer = null;
+    let showWatchdog = null;
+    const popupWindows = new Set();
+
+    const loginWindow = new BrowserWindow({
+      width: 940,
+      height: 720,
+      minWidth: 760,
+      minHeight: 560,
+      parent: owner && !owner.isDestroyed() ? owner : undefined,
+      modal: false,
+      show: false,
+      autoHideMenuBar: true,
+      title: cfg.title,
+      backgroundColor: '#111111',
+      icon: APP_ICON_ICO,
+      webPreferences: {
+        partition: cfg.partition,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    const closeAuxiliaryWindows = () => {
+      if (showWatchdog) {
+        clearTimeout(showWatchdog);
+        showWatchdog = null;
+      }
+      const windows = Array.from(popupWindows);
+      popupWindows.clear();
+      windows.forEach((win) => {
+        try {
+          if (win && !win.isDestroyed()) win.close();
+        } catch (_) {}
+      });
+    };
+
+    const finish = async (result) => {
+      if (settled) return;
+      settled = true;
+      if (pollTimer) clearInterval(pollTimer);
+      closeAuxiliaryWindows();
+      try { await cookieSession.flushStorageData(); } catch (_) {}
+      if (loginWindow && !loginWindow.isDestroyed()) {
+        loginWindow.close();
+      }
+      resolve(result);
+    };
+
+    const showLoginWindow = () => {
+      if (settled || !loginWindow || loginWindow.isDestroyed() || loginWindow.isVisible()) return;
+      loginWindow.show();
+      loginWindow.focus();
+    };
+
+    const checkCookies = async () => {
+      try {
+        const cookie = await cfg.readCookieHeader(cookieSession);
+        if (cfg.hasLogin(cookie)) {
+          await finish({ ok: true, cookie });
+        }
+      } catch (e) {
+        console.warn(cfg.title + ' login cookie check failed:', e.message);
+      }
+    };
+
+    const installLoginWindowHandlers = (win, isRoot) => {
+      if (!win || win.isDestroyed()) return;
+      win.webContents.setWindowOpenHandler(({ url }) => {
+        if (cfg.isTrustedUrl(url)) {
+          return {
+            action: 'allow',
+            overrideBrowserWindowOptions: {
+              width: 760,
+              height: 640,
+              parent: loginWindow,
+              modal: false,
+              show: true,
+              autoHideMenuBar: true,
+              backgroundColor: '#111111',
+              icon: APP_ICON_ICO,
+              webPreferences: {
+                partition: cfg.partition,
+                contextIsolation: true,
+                nodeIntegration: false,
+                sandbox: true,
+              },
+            },
+          };
+        }
+        if (/^https?:\/\//i.test(String(url || ''))) {
+          shell.openExternal(url).catch(() => {});
+        }
+        return { action: 'deny' };
+      });
+      win.webContents.on('did-create-window', (child) => {
+        popupWindows.add(child);
+        child.on('closed', () => popupWindows.delete(child));
+        installLoginWindowHandlers(child, false);
+      });
+      if (!isRoot) win.webContents.on('did-finish-load', checkCookies);
+    };
+    installLoginWindowHandlers(loginWindow, true);
+
+    loginWindow.webContents.on('did-finish-load', () => {
+      checkCookies();
+      showLoginWindow();
+    });
+
+    loginWindow.on('ready-to-show', showLoginWindow);
+    loginWindow.on('closed', async () => {
+      if (settled) return;
+      settled = true;
+      if (pollTimer) clearInterval(pollTimer);
+      closeAuxiliaryWindows();
+      try {
+        const cookie = await cfg.readCookieHeader(cookieSession);
+        try { await cookieSession.flushStorageData(); } catch (_) {}
+        const closeHasLogin = typeof cfg.closeHasLogin === 'function' ? cfg.closeHasLogin : cfg.hasLogin;
+        resolve(closeHasLogin(cookie)
+          ? { ok: true, cookie }
+          : { ok: false, cancelled: true, message: cfg.closeMessage });
+      } catch (e) {
+        resolve({ ok: false, error: e.message || cfg.closeMessage });
+      }
+    });
+
+    pollTimer = setInterval(checkCookies, 1200);
+    showWatchdog = setTimeout(showLoginWindow, 2500);
+    loginWindow.loadURL(cfg.url).catch((e) => finish({ ok: false, error: e.message }));
+  });
+}
+
+async function openKuwoLoginWindow(owner) {
+  return openOfficialLoginWindow(owner, {
+    partition: KUWO_LOGIN_PARTITION,
+    url: KUWO_LOGIN_URL,
+    title: '酷我音乐登录',
+    hasLogin: kuwoCookieHasLogin,
+    // On close, hand over any harvested kuwo.cn cookie: the server VIP
+    // probe is the real login gate, and the session-cookie name is
+    // unverified, so a strict close check could discard a real login.
+    closeHasLogin: (cookieText) => String(cookieText || '').trim().length > 0,
+    isTrustedUrl: isTrustedKuwoLoginUrl,
+    readCookieHeader: readKuwoLoginCookieHeader,
+    closeMessage: '酷我音乐登录窗口已关闭',
+  });
+}
+
+async function clearKuwoMusicLoginSession() {
+  const cookieSession = session.fromPartition(KUWO_LOGIN_PARTITION);
+  await cookieSession.clearStorageData({
+    storages: ['cookies', 'localstorage', 'indexdb', 'cachestorage'],
+  });
+  return { ok: true };
+}
+
+async function openYtmusicLoginWindow(owner) {
+  return openOfficialLoginWindow(owner, {
+    partition: YTMUSIC_LOGIN_PARTITION,
+    url: YTMUSIC_LOGIN_URL,
+    title: 'YouTube Music 登录',
+    hasLogin: ytmusicCookieHasLogin,
+    // On close, hand over the cookie when a Google session id is present;
+    // the server treats a saved cookie as logged in (library unverified).
+    closeHasLogin: (cookieText) => !!parseCookieHeader(cookieText).SID,
+    isTrustedUrl: isTrustedYtmusicLoginUrl,
+    readCookieHeader: readYtmusicLoginCookieHeader,
+    closeMessage: 'YouTube Music 登录窗口已关闭',
+  });
+}
+
+async function clearYtmusicLoginSession() {
+  const cookieSession = session.fromPartition(YTMUSIC_LOGIN_PARTITION);
   await cookieSession.clearStorageData({
     storages: ['cookies', 'localstorage', 'indexdb', 'cachestorage'],
   });
@@ -4748,6 +5027,8 @@ function loginCookieExportMeta(provider) {
     qq: { label: 'QQ音乐', files: [process.env.QQ_COOKIE_FILE, path.join(userData, '.qq-cookie')] },
     kugou: { label: '酷狗音乐', files: [process.env.KUGOU_COOKIE_FILE, path.join(userData, '.kugou-cookie')] },
     qishui: { label: '汽水音乐', files: [process.env.QISHUI_COOKIE_FILE, path.join(userData, '.qishui-cookie'), process.env.QISHUI_TOKEN_FILE, path.join(userData, '.qishui-token')] },
+    kuwo: { label: '酷我音乐', files: [process.env.KUWO_COOKIE_FILE, path.join(userData, '.kuwo-cookie')] },
+    ytmusic: { label: 'YouTube Music', files: [process.env.YTMUSIC_COOKIE_FILE, path.join(userData, '.ytmusic-cookie')] },
     spotify: { label: 'Spotify', files: [process.env.SPOTIFY_TOKEN_FILE, path.join(userData, '.spotify-token.json')] },
   };
   return entries[key] || null;
@@ -4888,6 +5169,22 @@ ipcMain.handle('kugou-music-open-login', async (event, options) => {
 
 ipcMain.handle('kugou-music-clear-login', async () => {
   return clearKugouMusicLoginSession();
+});
+
+ipcMain.handle('kuwo-music-open-login', async (event) => {
+  return openKuwoLoginWindow(getSenderWindow(event));
+});
+
+ipcMain.handle('kuwo-music-clear-login', async () => {
+  return clearKuwoMusicLoginSession();
+});
+
+ipcMain.handle('ytmusic-open-login', async (event) => {
+  return openYtmusicLoginWindow(getSenderWindow(event));
+});
+
+ipcMain.handle('ytmusic-clear-login', async () => {
+  return clearYtmusicLoginSession();
 });
 
 ipcMain.handle('qishui-music-clear-login', async () => {
@@ -5053,6 +5350,8 @@ function configureLocalServerEnvironment(port) {
   process.env.QQ_COOKIE_FILE = path.join(STABLE_USER_DATA_PATH, '.qq-cookie');
   process.env.KUGOU_COOKIE_FILE = path.join(STABLE_USER_DATA_PATH, '.kugou-cookie');
   process.env.QISHUI_COOKIE_FILE = path.join(STABLE_USER_DATA_PATH, '.qishui-cookie');
+  process.env.KUWO_COOKIE_FILE = path.join(STABLE_USER_DATA_PATH, '.kuwo-cookie');
+  process.env.YTMUSIC_COOKIE_FILE = path.join(STABLE_USER_DATA_PATH, '.ytmusic-cookie');
   process.env.QISHUI_TOKEN_FILE = path.join(STABLE_USER_DATA_PATH, '.qishui-token');
   process.env.QISHUI_QR_CONFIG_FILE = path.join(STABLE_USER_DATA_PATH, '.qishui-qr-login.json');
   process.env.MINERADIO_LISTEN_SYNC_FILE = path.join(STABLE_USER_DATA_PATH, 'listen-sync-journal.json');
