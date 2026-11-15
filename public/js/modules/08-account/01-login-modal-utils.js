@@ -78,6 +78,13 @@ function onUserBtnClick() {
   showLoginModal({ provider: hasAnyPlatformLogin() ? firstLoggedProvider() : loginProvider, source: 'top-account' });
 }
 var ACCOUNT_PROVIDER_KEYS = ['netease', 'qq', 'kugou', 'qishui'];
+// Login cards grid (v2.0.3 redesign): all 8 platforms get a card. The top
+// account pills above stay 4-provider (ACCOUNT_PROVIDER_KEYS) — only the
+// login modal shows the full set.
+var LOGIN_CARD_PROVIDERS = ['netease', 'qq', 'kugou', 'qishui', 'kuwo', 'ytmusic', 'apple', 'spotify'];
+function loginCardProviders() {
+  return LOGIN_CARD_PROVIDERS.slice();
+}
 var ACCOUNT_PROVIDER_ORDER_STORE_KEY = 'mineradio-account-provider-order-v1';
 var ACCOUNT_PROVIDER_VISIBLE_STORE_KEY = 'mineradio-account-provider-visible-v1';
 var topAccountPillDrag = null;
@@ -286,7 +293,8 @@ function hasPlatformLogin(provider) {
   return !!(st && st.loggedIn);
 }
 function hasAnyPlatformLogin() {
-  return hasPlatformLogin('netease') || hasPlatformLogin('qq') || hasPlatformLogin('kugou') || hasPlatformLogin('qishui');
+  return hasPlatformLogin('netease') || hasPlatformLogin('qq') || hasPlatformLogin('kugou') || hasPlatformLogin('qishui') ||
+    hasPlatformLogin('kuwo') || hasPlatformLogin('ytmusic');
 }
 function firstLoggedProvider() {
   if (hasPlatformLogin(activeAccountProvider)) return activeAccountProvider;
@@ -300,8 +308,8 @@ function providerAvatarSrc(provider, status) {
   status = status || platformStatus(provider) || {};
   if (status.avatar) return avatarSrc(status.avatar);
   var meta = platformMeta(provider);
-  var fill = provider === 'qq' ? '#bfd66b' : (provider === 'kugou' ? '#56e0ff' : (provider === 'qishui' ? '#45d68f' : (provider === 'spotify' ? '#1ed760' : '#d95b67')));
-  var bg = provider === 'qq' ? '#11150b' : (provider === 'kugou' ? '#071722' : (provider === 'qishui' ? '#071a12' : (provider === 'spotify' ? '#06140a' : '#180b0f')));
+  var fill = provider === 'qq' ? '#bfd66b' : (provider === 'kugou' ? '#56e0ff' : (provider === 'qishui' ? '#45d68f' : (provider === 'spotify' ? '#1ed760' : (provider === 'kuwo' ? '#ffb020' : (provider === 'ytmusic' ? '#ff4e45' : (provider === 'apple' ? '#fa57c1' : '#d95b67'))))));
+  var bg = provider === 'qq' ? '#11150b' : (provider === 'kugou' ? '#071722' : (provider === 'qishui' ? '#071a12' : (provider === 'spotify' ? '#06140a' : (provider === 'kuwo' ? '#1a1206' : (provider === 'ytmusic' ? '#1c0a0a' : (provider === 'apple' ? '#1c0a14' : '#180b0f'))))));
   var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="48" fill="' + bg + '"/><circle cx="48" cy="48" r="34" fill="' + fill + '" opacity=".16"/><text x="48" y="56" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="' + fill + '">' + meta.short + '</text></svg>';
   return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }

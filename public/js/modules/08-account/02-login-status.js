@@ -452,6 +452,109 @@ function startQishuiLoginStatusAutoRefresh() {
   }, 45000);
 }
 
+function normalizeKuwoLoginStatus(info) {
+  var fallback = { provider: 'kuwo', loggedIn: false, loginSupported: true, preview: false, nickname: '酷我音乐', userId: '', avatar: '', vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, stale: false, vipCheckedAt: 0, vipProbeAvailable: false };
+  var level = info && info.loggedIn ? providerVipLevel('kuwo', info) : (info && (info.vipLevel || info.vip_level) || 'none');
+  return Object.assign({}, fallback, info || {}, {
+    provider: 'kuwo',
+    loggedIn: !!(info && info.loggedIn),
+    loginSupported: true,
+    nickname: info && info.nickname || fallback.nickname,
+    userId: info && (info.userId || info.uid || info.userid) || '',
+    avatar: info && info.avatar || '',
+    vipType: Number(info && (info.vipType || info.vip_type) || 0) || 0,
+    vipLevel: level,
+    isVip: level !== 'none' || !!(info && info.isVip),
+    isSvip: level === 'svip' || !!(info && info.isSvip),
+    stale: !!(info && info.stale),
+    vipCheckedAt: Number(info && info.vipCheckedAt || 0) || 0,
+    vipProbeAvailable: !!(info && info.vipProbeAvailable)
+  });
+}
+function kuwoLoginStatusText(info) {
+  info = normalizeKuwoLoginStatus(info || kuwoLoginStatus);
+  if (!info.loggedIn) return info.stale ? '酷我登录状态暂无法验证，请稍后重试' : '点击“登录”打开酷我官方窗口，登录后仅显示 VIP 状态';
+  var level = providerVipLevel('kuwo', info);
+  var member = level === 'svip' ? 'SVIP' : (level === 'vip' ? 'VIP' : '普通账号');
+  return '酷我已登录 · ' + (info.nickname || '酷我音乐') + ' · ' + member + ' · 个人歌单暂不支持同步';
+}
+async function refreshKuwoLoginStatus() {
+  try {
+    var info = await apiJson('/api/kuwo/login/status?t=' + Date.now());
+    var prevLogged = !!kuwoLoginStatus.loggedIn;
+    kuwoLoginStatus = normalizeKuwoLoginStatus(info);
+    auditProviderVipState('kuwo', kuwoLoginStatus);
+    if (!kuwoLoginStatus.loggedIn) {
+      if (prevLogged || kuwoLoginWasLoggedIn) showToast(kuwoLoginStatus.stale ? '酷我登录状态暂无法验证' : '酷我已退出登录');
+    }
+    kuwoLoginWasLoggedIn = !!kuwoLoginStatus.loggedIn;
+    if (!hasPlatformLogin(activeAccountProvider)) activeAccountProvider = firstLoggedProvider();
+    renderUserBtn();
+    return kuwoLoginStatus;
+  } catch (e) {
+    console.warn('Kuwo login status failed:', e);
+    kuwoLoginStatus = normalizeKuwoLoginStatus(kuwoLoginStatus && kuwoLoginStatus.loggedIn
+      ? Object.assign({}, kuwoLoginStatus, { stale: true }) : null);
+    renderUserBtn();
+    return kuwoLoginStatus;
+  }
+}
+function startKuwoLoginStatusAutoRefresh() {
+  if (kuwoLoginAutoRefreshTimer) clearInterval(kuwoLoginAutoRefreshTimer);
+  kuwoLoginAutoRefreshTimer = setInterval(function () {
+    refreshKuwoLoginStatus().catch(function (e) { console.warn('Kuwo login auto refresh failed:', e); });
+  }, 45000);
+}
+
+function normalizeYtmusicLoginStatus(info) {
+  var fallback = { provider: 'ytmusic', loggedIn: false, loginSupported: true, preview: false, nickname: 'YouTube Music', userId: '', avatar: '', vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, stale: false };
+  return Object.assign({}, fallback, info || {}, {
+    provider: 'ytmusic',
+    loggedIn: !!(info && info.loggedIn),
+    loginSupported: true,
+    nickname: info && info.nickname || fallback.nickname,
+    userId: info && (info.userId || info.uid) || '',
+    avatar: info && info.avatar || '',
+    vipType: Number(info && (info.vipType || info.vip_type) || 0) || 0,
+    vipLevel: info && (info.vipLevel || info.vip_level) || 'none',
+    isVip: !!(info && info.isVip),
+    isSvip: !!(info && info.isSvip),
+    stale: !!(info && info.stale)
+  });
+}
+function ytmusicLoginStatusText(info) {
+  info = normalizeYtmusicLoginStatus(info || ytmusicLoginStatus);
+  if (!info.loggedIn) return info.stale ? 'YouTube Music 登录状态暂无法验证，请稍后重试' : '点击“登录”打开 YouTube Music 官方窗口';
+  return 'YouTube Music 已登录（Cookie 会话）· 个人曲库尚未验证';
+}
+async function refreshYtmusicLoginStatus() {
+  try {
+    var info = await apiJson('/api/ytmusic/login/status?t=' + Date.now());
+    var prevLogged = !!ytmusicLoginStatus.loggedIn;
+    ytmusicLoginStatus = normalizeYtmusicLoginStatus(info);
+    auditProviderVipState('ytmusic', ytmusicLoginStatus);
+    if (!ytmusicLoginStatus.loggedIn) {
+      if (prevLogged || ytmusicLoginWasLoggedIn) showToast('YouTube Music 已退出登录');
+    }
+    ytmusicLoginWasLoggedIn = !!ytmusicLoginStatus.loggedIn;
+    if (!hasPlatformLogin(activeAccountProvider)) activeAccountProvider = firstLoggedProvider();
+    renderUserBtn();
+    return ytmusicLoginStatus;
+  } catch (e) {
+    console.warn('YTMusic login status failed:', e);
+    ytmusicLoginStatus = normalizeYtmusicLoginStatus(ytmusicLoginStatus && ytmusicLoginStatus.loggedIn
+      ? Object.assign({}, ytmusicLoginStatus, { stale: true }) : null);
+    renderUserBtn();
+    return ytmusicLoginStatus;
+  }
+}
+function startYtmusicLoginStatusAutoRefresh() {
+  if (ytmusicLoginAutoRefreshTimer) clearInterval(ytmusicLoginAutoRefreshTimer);
+  ytmusicLoginAutoRefreshTimer = setInterval(function () {
+    refreshYtmusicLoginStatus().catch(function (e) { console.warn('YTMusic login auto refresh failed:', e); });
+  }, 45000);
+}
+
 function normalizeSpotifyLoginStatus(info) {
   var fallback = { provider: 'spotify', loggedIn: false, configured: false, oauthConfigured: false, oauthMissing: [], preview: false, nickname: 'Spotify', userId: '', accountId: '', avatar: '', product: '', membershipKnown: false, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, stale: false, reauthRequired: false, playbackKeyReady: false, playbackMode: 'recommend-match', tokenConfigured: false, tokenFileExists: false, credentialsFileExists: false, localConfigMissing: false, searchReady: false };
   var loggedIn = !!(info && info.loggedIn);

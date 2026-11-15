@@ -143,6 +143,8 @@ function resetAllProviderRendererLoginState() {
   kugouLoginStatus = { provider: 'kugou', loggedIn: false, preview: false, nickname: '酷狗音乐', userId: '', avatar: '', vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, playbackKeyReady: false };
   qishuiLoginStatus = { provider: 'qishui', loggedIn: false, configured: false, oauthConfigured: false, oauthMissing: [], preview: false, nickname: '汽水音乐', userId: '', avatar: '', vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, playbackKeyReady: false, playbackMode: 'recommend-match' };
   spotifyLoginStatus = { provider: 'spotify', loggedIn: false, configured: false, oauthConfigured: false, oauthMissing: [], preview: false, nickname: 'Spotify', userId: '', avatar: '', product: '', vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, playbackKeyReady: false, playbackMode: 'recommend-match', tokenConfigured: false, tokenFileExists: false, credentialsFileExists: false, localConfigMissing: false };
+  kuwoLoginStatus = { provider: 'kuwo', loggedIn: false, loginSupported: true, preview: false, nickname: '酷我音乐', userId: '', avatar: '', vipType: 0, vipLevel: 'none', isVip: false, isSvip: false };
+  ytmusicLoginStatus = { provider: 'ytmusic', loggedIn: false, loginSupported: true, preview: false, nickname: 'YouTube Music', userId: '', avatar: '', vipType: 0, vipLevel: 'none', isVip: false, isSvip: false };
   loginStatusChecked = true;
   loginStatusCheckFailed = false;
   neteasePlaylists = [];
@@ -187,7 +189,9 @@ async function logoutAllAccountsAndResetEasterEgg() {
       apiJson('/api/logout'),
       apiJson('/api/qq/logout'),
       apiJson('/api/kugou/logout'),
-      apiJson('/api/qishui/logout')
+      apiJson('/api/qishui/logout'),
+      apiJson('/api/kuwo/logout'),
+      apiJson('/api/ytmusic/logout')
     ]);
     var result = await requestLoginEasterEggReplayReset();
     if (!result || !result.ok || result.unlocked || result.resetComplete === false) {
