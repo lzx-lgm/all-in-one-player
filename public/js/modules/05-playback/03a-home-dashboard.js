@@ -29,6 +29,7 @@ var homePlatformRecommendationState = {
   feeds: {
     qishui: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
     kugou: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
+    qq: { loading: false, loaded: false, songs: [], error: '', message: '', mode: '', source: '', fallback: false, provenance: '' },
   },
 };
 
@@ -880,6 +881,13 @@ function homePlatformRecommendationFeedConfig(source) {
       readyText: '来自酷狗 FM 推荐',
       playlistName: '酷狗推荐 FM',
     },
+    qq: {
+      endpoint: '/api/qq/recommendations?limit=12',
+      sectionTitle: '热门推荐',
+      cardLabel: 'QQ 热门推荐',
+      readyText: '来自 QQ 音乐热门推荐',
+      playlistName: 'QQ 热门推荐',
+    },
   }[source] || null;
 }
 
@@ -1207,7 +1215,7 @@ function bindHomePlatformRecommendationControls() {
     closeHomePlatformRecommendations();
     if (kind === 'netease-playlist' && typeof openHomePlaylist === 'function') openHomePlaylist(index);
     else if (kind === 'netease-song' && typeof playHomeSong === 'function') playHomeSong(index);
-    else if (/^(qishui|kugou|spotify)-song$/.test(kind)) playHomePlatformFeedSong(kind.replace(/-song$/, ''), index);
+    else if (/^(qishui|kugou|spotify|qq)-song$/.test(kind)) playHomePlatformFeedSong(kind.replace(/-song$/, ''), index);
   });
   if (list) list.addEventListener('scroll', scheduleHomePlatformDailyWindowRender, { passive: true });
   window.addEventListener('resize', scheduleHomePlatformDailyWindowRender, { passive: true });
