@@ -22,6 +22,8 @@ win-unpacked/
 .kugou-vip-evidence.json
 .qishui-cookie
 .qishui-token
+.kuwo-cookie
+.ytmusic-cookie
 .qishui-oauth.json
 .qishui-qr-identity.json
 .qishui-qr-login.json

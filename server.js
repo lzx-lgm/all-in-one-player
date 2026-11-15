@@ -99,6 +99,8 @@ const {
   handleKuwoUserPlaylists,
   getKuwoLoginInfo,
   kuwoAudioReferer,
+  writeKuwoCookie,
+  clearKuwoCookie,
 } = require('./kuwo-api');
 const {
   handleYtmSearch,
@@ -5866,7 +5868,25 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pn === '/api/kuwo/login/status') {
-    sendJSON(res, getKuwoLoginInfo());
+    sendJSON(res, await getKuwoLoginInfo());
+    return;
+  }
+
+  // Kuwo login (v2.0.3): the Electron login window harvests the www.kuwo.cn
+  // session cookie and POSTs it here; the stored cookie is verified by
+  // probing the Kuwo VIP endpoint (see kuwo-api.js probeKuwoVip).
+  if (pn === '/api/kuwo/login/cookie') {
+    try {
+      if (req.method !== 'POST') { sendJSON(res, { provider: 'kuwo', ok: false, error: 'METHOD_NOT_ALLOWED' }, 405); return; }
+      const body = await readRequestBody(req);
+      const cookie = String((body && (body.cookie || body.cookieHeader)) || '');
+      if (!cookie) { sendJSON(res, { provider: 'kuwo', ok: false, error: 'MISSING_COOKIE' }, 400); return; }
+      const saved = writeKuwoCookie(cookie);
+      sendJSON(res, Object.assign({ provider: 'kuwo', ok: saved, saved }, await getKuwoLoginInfo()));
+    } catch (err) {
+      console.error('[KuwoLoginCookie]', err);
+      sendJSON(res, { provider: 'kuwo', ok: false, error: err.message }, 500);
+    }
     return;
   }
 
@@ -5876,7 +5896,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pn === '/api/kuwo/logout') {
-    sendJSON(res, { provider: 'kuwo', loggedIn: false, message: '酷我无需登录。' });
+    clearKuwoCookie();
+    sendJSON(res, { provider: 'kuwo', loggedIn: false, message: '酷我登录已清除。' });
     return;
   }
 

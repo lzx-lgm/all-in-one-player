@@ -10,6 +10,8 @@
 const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const KUWO_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const KUWO_REFERER = 'http://www.kuwo.cn/';
@@ -24,6 +26,97 @@ const KUWO_RCM_PLAYLIST = 'http://wapi.kuwo.cn/api/pc/classify/playlist/getRcmPl
 const KUWO_QUALITY_LADDER = ['128kmp3', '320kmp3', 'flac', '2000kflac'];
 const KUWO_PLAY_TIMEOUT_MS = 8000;
 const KUWO_PROBE_TIMEOUT_MS = 2500;
+
+// Kuwo login (fork addition, v2.0.3): the user signs in on www.kuwo.cn inside
+// an Electron login window; the harvested session cookie is persisted here
+// (desktop mode repoints KUWO_COOKIE_FILE into the app userData dir).
+// Login state is verified by probing the VIP endpoint with that cookie.
+// NOTE (unverified): the exact probe response shape and the real
+// session-cookie name were never published by Kuwo; the probe below only
+// reports loggedIn:true when the response is a logged-in-shaped VIP payload
+// (code 200 + a data object carrying vip/user fields). kw_token is only a
+// self-generated CSRF token and is NEVER treated as a login credential.
+const KUWO_COOKIE_FILE = process.env.KUWO_COOKIE_FILE
+  || path.join(__dirname, '.kuwo-cookie');
+const KUWO_VIP_URL = 'https://vip1.kuwo.cn/vip/v2/user/vip';
+const KUWO_VIP_PROBE_CACHE_MS = 60 * 1000;
+let kuwoVipProbeCache = { cookie: '', at: 0, result: null };
+
+function readKuwoCookie() {
+  try { return fs.readFileSync(KUWO_COOKIE_FILE, 'utf8').trim(); } catch (e) { return ''; }
+}
+
+function writeKuwoCookie(cookie) {
+  try {
+    fs.writeFileSync(KUWO_COOKIE_FILE, String(cookie || ''), 'utf8');
+    kuwoVipProbeCache = { cookie: '', at: 0, result: null };
+    return true;
+  } catch (e) { return false; }
+}
+
+function clearKuwoCookie() {
+  return writeKuwoCookie('');
+}
+
+// Probe the Kuwo VIP endpoint with the stored session cookie. Returns a
+// conservative verdict: loggedIn only on a logged-in-shaped VIP payload.
+async function probeKuwoVip(cookie) {
+  if (!cookie) return { loggedIn: false };
+  const now = Date.now();
+  if (kuwoVipProbeCache.cookie === cookie && kuwoVipProbeCache.result
+    && now - kuwoVipProbeCache.at < KUWO_VIP_PROBE_CACHE_MS) {
+    return kuwoVipProbeCache.result;
+  }
+  let result = { loggedIn: false };
+  try {
+    const probeIp = randomIp();
+    const res = await kuwoGet(KUWO_VIP_URL, {
+      timeoutMs: KUWO_PLAY_TIMEOUT_MS,
+      headers: {
+        'User-Agent': KUWO_UA,
+        Referer: KUWO_REFERER,
+        Cookie: cookie,
+        'X-Forwarded-For': probeIp,
+        'X-Real-IP': probeIp,
+      },
+    });
+    const body = parseJSONText(res.text);
+    const code = body && body.code;
+    const data = body && body.data;
+    const hasVipFields = data && typeof data === 'object' && (
+      data.vipType !== undefined || data.vip_type !== undefined ||
+      data.isVip !== undefined || data.is_vip !== undefined ||
+      data.vip !== undefined ||
+      data.userId !== undefined || data.uid !== undefined ||
+      data.userid !== undefined || data.userName !== undefined ||
+      data.nickname !== undefined);
+    if (res.status === 200 && (code === undefined || Number(code) === 200) && hasVipFields) {
+      const vipType = Number(data.vipType || data.vip_type || 0) || 0;
+      const isVip = data.isVip === true || data.is_vip === true || vipType > 0 || data.vip === true;
+      const isSvip = data.isSvip === true || data.is_svip === true
+        || /svip|super/i.test(String(data.vipTypeName || data.vipName || data.memberType || ''));
+      result = {
+        loggedIn: true,
+        vipType,
+        isVip,
+        isSvip,
+        vipLevel: isSvip ? 'svip' : (isVip ? 'vip' : 'none'),
+        nickname: String(data.nickname || data.userName || data.username || ''),
+        userId: String(data.userId || data.uid || data.userid || ''),
+        vipCheckedAt: Date.now(),
+        vipProbeAvailable: true,
+      };
+    } else if (body && (Number(code) === 401 || Number(code) === 403 || res.status === 401 || res.status === 403)) {
+      result = { loggedIn: false, probeError: 'KUWO_VIP_UNAUTHORIZED' };
+    } else {
+      result = { loggedIn: false, probeError: 'KUWO_VIP_NOT_LOGGED_IN' };
+    }
+  } catch (e) {
+    result = { loggedIn: false, stale: true, probeError: e.message || 'KUWO_VIP_PROBE_FAILED' };
+  }
+  kuwoVipProbeCache = { cookie, at: now, result };
+  return result;
+}
 
 function randomKwToken() {
   return crypto.randomBytes(8).toString('hex');
@@ -345,12 +438,35 @@ function handleKuwoUserPlaylists() {
   return { provider: 'kuwo', playlists: [], supported: false, error: 'KUWO_LIBRARY_UNSUPPORTED' };
 }
 
-function getKuwoLoginInfo() {
+async function getKuwoLoginInfo() {
+  const cookie = readKuwoCookie();
+  if (!cookie) {
+    return {
+      provider: 'kuwo',
+      loggedIn: false,
+      loginSupported: true,
+      message: '酷我未登录：登录后仅显示 VIP 状态，个人歌单暂无公开接口、暂不支持同步。',
+    };
+  }
+  const probe = await probeKuwoVip(cookie);
+  if (probe.loggedIn) {
+    return Object.assign({
+      provider: 'kuwo',
+      loggedIn: true,
+      loginSupported: true,
+      nickname: probe.nickname || '酷我音乐',
+      message: '酷我已登录 · 仅显示 VIP 状态，个人歌单暂无公开接口、暂不支持同步。',
+    }, probe);
+  }
   return {
     provider: 'kuwo',
     loggedIn: false,
-    loginSupported: false,
-    message: '酷我暂不支持账号登录同步：可搜索、播歌、看歌词和公开歌单，个人歌单暂不支持。',
+    loginSupported: true,
+    stale: !!probe.stale,
+    probeError: probe.probeError || '',
+    message: probe.stale
+      ? '酷我登录状态暂无法验证，请稍后重试。'
+      : '酷我登录未完成或已失效：登录后仅显示 VIP 状态，个人歌单暂无公开接口、暂不支持同步。',
   };
 }
 
@@ -372,4 +488,8 @@ module.exports = {
   handleKuwoUserPlaylists,
   getKuwoLoginInfo,
   kuwoAudioReferer,
+  readKuwoCookie,
+  writeKuwoCookie,
+  clearKuwoCookie,
+  probeKuwoVip,
 };
