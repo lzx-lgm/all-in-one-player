@@ -100,7 +100,7 @@ const APP_PACKAGE_INFO = (() => {
   }
 })();
 const APP_METADATA = APP_PACKAGE_INFO.mineradio || {};
-const APP_NAME = process.env.MINERADIO_RUNTIME_NAME || APP_METADATA.runtimeName || APP_PACKAGE_INFO.productName || 'Mineradio';
+const APP_NAME = process.env.MINERADIO_RUNTIME_NAME || APP_METADATA.runtimeName || APP_PACKAGE_INFO.productName || '全能播放器';
 const APP_USER_MODEL_ID = process.env.MINERADIO_APP_USER_MODEL_ID || APP_METADATA.appUserModelId || (APP_PACKAGE_INFO.build && APP_PACKAGE_INFO.build.appId) || 'com.mineradio.desktop';
 const APP_ICON_ICO = path.join(__dirname, '..', 'build', 'icon.ico');
 const CURRENT_FX_AUTOSAVE_FILE = 'current-fx-autosave.json';
@@ -290,7 +290,7 @@ function cacheSettingsConfigPath() {
 function defaultCacheRootPath() {
   const dDrive = 'D:\\';
   return fs.existsSync(dDrive)
-    ? path.join(dDrive, 'MineradioCache')
+    ? path.join(dDrive, '全能播放器缓存')
     : path.join(app.getPath('userData'), 'cache');
 }
 
@@ -2289,8 +2289,8 @@ function reportWindowCreationFailure(context, error) {
     startupErrorReported = true;
     try {
       // Keep this literal visible for startup dialog regression checks:
-      // dialog.showErrorBox('Mineradio 启动失败'
-      dialog.showErrorBox(`Mineradio 启动失败 (${code})`, buildStartupErrorMessage(context, code, logInfo, error));
+      // dialog.showErrorBox('全能播放器启动失败'
+      dialog.showErrorBox(`全能播放器启动失败 (${code})`, buildStartupErrorMessage(context, code, logInfo, error));
     } catch (_) {}
   }
   if (!startupCompleted) {
@@ -3364,7 +3364,7 @@ function startSpotifyOAuthCallbackServer(redirectUri, onCallback) {
         const result = await onCallback(current);
         const ok = !!(result && result.ok);
         res.writeHead(ok ? 200 : 500, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(spotifyOAuthResultHtml(ok, (result && (result.message || result.error)) || (ok ? '可以回到 Mineradio。' : '请回到 Mineradio 重新尝试。')));
+        res.end(spotifyOAuthResultHtml(ok, (result && (result.message || result.error)) || (ok ? '可以回到全能播放器。' : '请回到全能播放器重新尝试。')));
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(spotifyOAuthResultHtml(false, e && e.message || 'SPOTIFY_OAUTH_CALLBACK_FAILED'));
@@ -4033,7 +4033,7 @@ function createDesktopLyricsWindow(payload = {}) {
     focusable: false,
     skipTaskbar: true,
     show: false,
-    title: 'Mineradio Desktop Lyrics',
+    title: '全能播放器桌面歌词',
     webPreferences: {
       preload: path.join(__dirname, 'overlay-preload.js'),
       contextIsolation: true,
@@ -4383,7 +4383,7 @@ ipcMain.handle('mineradio-memory-purge-system', async (_event, payload = {}) => 
     if (isMainWindowForegroundVisible()) {
       return {
         ok: true,
-        result: { ok: false, skipped: true, reason: 'foreground-visible', message: 'System memory purge is skipped while Mineradio is visible.' },
+        result: { ok: false, skipped: true, reason: 'foreground-visible', message: 'System memory purge is skipped while the player is visible.' },
         snapshot: systemMemory.getMemorySnapshot(),
         elevated: false,
         systemPurgeAvailable: systemMemory.SYSTEM_PURGE_AVAILABLE === true,
@@ -4422,7 +4422,7 @@ ipcMain.handle('mineradio-cache-get-settings', async () => {
 
 ipcMain.handle('mineradio-cache-choose-directory', async () => {
   const result = await dialog.showOpenDialog({
-    title: '选择 Mineradio 缓存目录',
+    title: '选择全能播放器缓存目录',
     defaultPath: cacheSettings.rootPath,
     properties: ['openDirectory', 'createDirectory'],
   });
@@ -5057,7 +5057,7 @@ ipcMain.handle('mineradio-export-json-file', async (event, payload = {}) => {
     const owner = getSenderWindow(event);
     const defaultName = String(payload.defaultName || 'mineradio-export.json').replace(/[\\/:*?"<>|]+/g, '-');
     const result = await dialog.showSaveDialog(owner, {
-      title: '导出 Mineradio 存档',
+      title: '导出全能播放器存档',
       defaultPath: defaultName.toLowerCase().endsWith('.json') ? defaultName : `${defaultName}.json`,
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
@@ -5074,7 +5074,7 @@ ipcMain.handle('mineradio-import-json-file', async (event) => {
   try {
     const owner = getSenderWindow(event);
     const result = await dialog.showOpenDialog(owner, {
-      title: '导入 Mineradio 存档',
+      title: '导入全能播放器存档',
       properties: ['openFile'],
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
@@ -5597,7 +5597,7 @@ async function ensureLocalServerStarted() {
 
 function showMainWindowSafely(win, reason) {
   if (!win || win.isDestroyed()) return false;
-  // A renderer may be reloaded while the user intentionally keeps Mineradio
+  // A renderer may be reloaded while the user intentionally keeps 全能播放器
   // in the tray. Runtime recovery must never turn that reload into a surprise
   // foreground window.
   if (startupCompleted && win.__mineradioIntentionalHide === true) return false;
@@ -5804,7 +5804,7 @@ function recoverMainWindowAfterRendererGone(win, details = {}, cleanupPromise = 
   if (!attempt) {
     const error = new Error('renderer recovery limit reached');
     const log = writeStartupErrorLog('Runtime renderer recovery', 'MR-RUNTIME-RENDERER-LOOP', error);
-    dialog.showErrorBox('Mineradio 显示恢复失败', `前台界面连续异常退出，已停止自动重载。\n日志：${log.file}`);
+    dialog.showErrorBox('全能播放器显示恢复失败', `前台界面连续异常退出，已停止自动重载。\n日志：${log.file}`);
     return Promise.resolve(false);
   }
   const keepFullscreen = win.isFullScreen() || windowFullscreenActive;
@@ -5840,7 +5840,7 @@ function recoverMainWindowAfterRendererGone(win, details = {}, cleanupPromise = 
         try { win.show(); } catch (_) { }
       }
       if (attempt >= RENDERER_RECOVERY_MAX_ATTEMPTS) {
-        dialog.showErrorBox('Mineradio 显示恢复失败', `前台界面无法重新加载。\n日志：${log.file}`);
+        dialog.showErrorBox('全能播放器显示恢复失败', `前台界面无法重新加载。\n日志：${log.file}`);
       }
     }
     return false;

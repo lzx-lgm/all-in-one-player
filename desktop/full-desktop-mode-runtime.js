@@ -210,9 +210,9 @@ try {
   if ([MineradioDesktopCoexistNative]::GetParent($target) -ne $defView) { throw "FULL_DESKTOP_ICON_HOST_ATTACH_FAILED" }
   $localX = ${x} - $parentRect.Left
   $localY = ${y} - $parentRect.Top
-  # Keep the one complete Mineradio surface below Explorer's real SysListView32.
+  # Keep the one complete 全能播放器 surface below Explorer's real SysListView32.
   # The native icon layer makes Explorer's black background transparent while
-  # retaining the real icon pixels and their native hit testing above Mineradio.
+  # retaining the real icon pixels and their native hit testing above 全能播放器.
   if (-not [MineradioDesktopCoexistNative]::SetWindowPos($target, [IntPtr]::new(1), $localX, $localY, ${width}, ${height}, 0x0030)) {
     throw "FULL_DESKTOP_ICON_HOST_POSITION_FAILED"
   }
@@ -1034,7 +1034,7 @@ class FullDesktopModeRuntime {
           this.lastError = this.iconShapeError;
           this.phase = 'recovering-icon-layer';
           // Do not leave enabled=true/interative=true paired with a hidden
-          // Mineradio HWND. Explorer has confirmed restoration, so keep the
+          // 全能播放器 HWND. Explorer has confirmed restoration, so keep the
           // existing renderer visible while the serialized rebind is queued.
           if (this.isWindowAlive()) safeCall(this.window, 'showInactive', null);
           this.generation += 1;
@@ -1154,7 +1154,7 @@ class FullDesktopModeRuntime {
 
   applyInteractivePointerRoute(win = this.window, options = {}) {
     if (!this.isWindowAlive(win)) return null;
-    // A locked desktop surface passes normal Mineradio areas through to
+    // A locked desktop surface passes normal 全能播放器 areas through to
     // Explorer, but forwarded move events keep the renderer informed. The
     // right-top controller is the permanent recovery island: entering its
     // reveal corridor immediately restores native input so the same switch can
@@ -1613,7 +1613,7 @@ class FullDesktopModeRuntime {
 
   prepareWindow(win, bounds, options = {}) {
     if (options.hide !== false) safeCall(win, 'hide', null);
-    // The visual HWND remains one continuous Mineradio surface below Explorer's
+    // The visual HWND remains one continuous 全能播放器 surface below Explorer's
     // color-keyed icon layer. Clear legacy BrowserWindow holes before reparenting.
     safeCall(win, 'setShape', null, []);
     safeCall(win, 'setHasShadow', null, false);
@@ -1813,7 +1813,7 @@ class FullDesktopModeRuntime {
       return { ok: true, enabled: true, interactive: true, status: this.emitStatus(reason) };
     } catch (error) {
       // A failed repair must restore a normal visible window; never leave the
-      // WE base alive behind enabled=true plus a hidden Mineradio HWND.
+      // WE base alive behind enabled=true plus a hidden 全能播放器 HWND.
       return this.disableInternal(reason + '-failed', error);
     }
   }

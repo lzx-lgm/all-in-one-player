@@ -729,7 +729,7 @@ public static class MineradioDesktopNativeIconLayerGuard {
 
     System.Threading.Thread inputThread = new System.Threading.Thread(ReadCommands);
     inputThread.IsBackground = true;
-    inputThread.Name = "Mineradio native desktop icon layer input";
+    inputThread.Name = "全能播放器 native desktop icon layer input";
     inputThread.Start();
 
     UIntPtr timerId = UIntPtr.Zero;

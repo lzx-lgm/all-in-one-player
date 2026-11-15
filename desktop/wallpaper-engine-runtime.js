@@ -1393,7 +1393,7 @@ public sealed class MineradioWeDwmSurfaceHost : Form {
     // existing control bar, avoiding an extra transparent layer in the UI.
     // In desktop coexistence the authoritative Electron HWND is a shaped child
     // above DefView inside Explorer's icon WorkerW. Keep that same icon host
-    // between Mineradio and the one base DWM surface. Normal top-level windows
+    // between 全能播放器 and the one base DWM surface. Normal top-level windows
     // may opt in too; unrelated WorkerW children retain the exact fallback.
     IntPtr hostRoot = GetAncestor(hostWindow, GA_ROOT);
     // A hot flag change may overlap the native reparenting transition by one
@@ -2769,7 +2769,7 @@ class WallpaperEngineRuntime {
     const packageVolume = path.parse(path.resolve(scenePackage)).root.toLowerCase();
     const preferredStageRoot = nativeVolume === packageVolume
       ? path.resolve(this.nativeTempPath, 'wallpaper-engine-scene-stage')
-      : path.resolve(path.parse(scenePackage).root, 'MineradioCache', 'wallpaper-engine-scene-stage');
+      : path.resolve(path.parse(scenePackage).root, '全能播放器缓存', 'wallpaper-engine-scene-stage');
     let stageRoot = preferredStageRoot;
     try {
       await fs.promises.mkdir(stageRoot, { recursive: true });
@@ -2999,7 +2999,7 @@ class WallpaperEngineRuntime {
     const muted = await this._applySessionMute(session);
     if (!muted || this.active !== session || session.stopping === true) return false;
     if (!session.windowEmbedding || session.windowEmbedding.aligned !== true) return false;
-    // Keep the native WE source physically aligned behind Mineradio so the
+    // Keep the native WE source physically aligned behind 全能播放器 so the
     // engine continues to read the real Windows cursor. DWM mirrors that live
     // surface into a click-through helper directly beneath the transparent
     // Electron host; unlike Chromium window capture, it does not bake a second
@@ -3850,7 +3850,7 @@ class WallpaperEngineRuntime {
     const session = {
       id: String(id || '').toLowerCase(),
       sessionId,
-      locationTitle: `Mineradio Wallpaper ${sessionId}`,
+      locationTitle: `全能播放器 Wallpaper ${sessionId}`,
       sourceId: '',
       windowSourceId: '',
       windowEmbedding: null,

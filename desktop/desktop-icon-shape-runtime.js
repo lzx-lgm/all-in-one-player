@@ -504,7 +504,7 @@ public static class MineradioDesktopIconShapeWatcherNative {
       }
     });
     inputThread.IsBackground = true;
-    inputThread.Name = "Mineradio desktop icon watcher input";
+    inputThread.Name = "全能播放器 desktop icon watcher input";
     inputThread.Start();
 
     UIntPtr timerId = UIntPtr.Zero;
