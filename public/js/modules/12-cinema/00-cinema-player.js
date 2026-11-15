@@ -1,7 +1,7 @@
-/* Cinema — 全能影院 (fork addition, v2.0.0; v2.0.3 影院重做；v2.0.4 真音乐 MV)。
+/* Cinema — 全能影院 (fork addition, v2.0.0; v2.0.3 影院重做；v2.0.4 真音乐 MV；v2.0.5 MV 再加 YouTube Music)。
    不再是浏览器播放器外观：自绘放映控制台（播控条/音量/进度/氛围光/放映单），
    影院氛围光 + 跑马灯片名 + 胶片齿孔进度条。
-   放映单是真音乐 MV（网易云音乐 /api/mv/*：搜 MV + 最新 MV，列表拉回来先逐
+   放映单是真音乐 MV（网易云音乐 + YouTube Music，/api/mv/*：搜 MV + 最新 MV，列表拉回来先逐
    个探播放地址、只留能播的再展示）；MV 服务连不上时回落到 8 个演示片段，绝不空着。
    声音走“影院专线”：桌面版把视频音频接进一条独立的 AudioContext（和音乐
    一样的 Web Audio 通路、同一个输出设备），不再只依赖 <video> 元素自身
@@ -166,7 +166,7 @@
       '<div class="cin-urlrow"><input id="cinUrlInput" type="text" placeholder="粘贴视频直链（MP4 / WebM…）后点播放"><button class="cin-tbtn" id="cinUrlBtn">播这个链接</button></div>' +
       '<div class="cin-drop" id="cinDropZone">把你自己的视频拖到这里，直接原画播放 <button class="cin-tbtn" id="cinPickBtn" style="margin-left:8px">选择文件</button><input type="file" id="cinLocalFile" accept="video/*,.mkv,.avi,.mov" class="cin-hidden"></div>' +
       '<div class="cin-note" id="cinLocalMeta" style="margin-top:8px"></div>' +
-      '<h3 style="margin:14px 0 0;font-size:14px">🎵 音乐 MV <span class="cin-note">— 真 MV，来自网易云音乐；点一张就放，放完自动接下一张</span></h3>' +
+      '<h3 style="margin:14px 0 0;font-size:14px">🎵 音乐 MV <span class="cin-note">— 真 MV，网易云 + YouTube Music；点一张就放，放完自动接下一张</span></h3>' +
       '<div class="cin-urlrow" style="margin-top:8px"><input id="cinMvSearchInput" type="text" placeholder="搜 MV：歌名 / 歌手，比如 晴天 周杰伦"><button class="cin-tbtn" id="cinMvSearchBtn">搜 MV</button><span class="cin-note" id="cinMvNote">正在拉最新 MV…</span></div>' +
       '<div class="cin-grid" id="cinMvGrid"></div>';
     overlay.appendChild(panel);
@@ -311,7 +311,7 @@
       if (item.src) { loadRemote(item); markQueuePlaying(idx); return; }
       if (!item.id) { loadRemote(item); markQueuePlaying(idx); return; }
       status.textContent = '正在取 MV 播放地址…';
-      fetch('/api/mv/url?id=' + encodeURIComponent(item.id))
+      fetch('/api/mv/url?id=' + encodeURIComponent(item.id) + '&provider=' + encodeURIComponent(item.provider || 'netease'))
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d && d.playable && d.url) {
@@ -322,7 +322,7 @@
             advanceOnUnavailable(idx, tried);
           }
         })
-        .catch(function () { toast('取 MV 播放地址失败：网络连不上网易云，换一张试试'); });
+        .catch(function () { toast('取 MV 播放地址失败：网络问题，换一张试试'); });
     }
     /* 有的 MV 要登录/会员才给地址：这张播不了就自动换下一张，别让用户卡在第一张。 */
     function advanceOnUnavailable(failedIdx, tried) {
@@ -389,7 +389,9 @@
     var grid = $('cinMvGrid');
     var mvLoaded = false;
     function normMv(m) {
-      return { id: m.id, title: m.name || m.title || '', artist: m.artist || '', plat: '网易云音乐', srcLabel: '网易云音乐 MV', cover: m.cover || '', src: null };
+      var provider = m.provider || 'netease';
+      var plat = provider === 'ytmusic' ? 'YouTube Music' : '网易云音乐';
+      return { id: m.id, title: m.name || m.title || '', artist: m.artist || '', provider: provider, plat: plat, srcLabel: plat + ' MV', cover: m.cover || '', src: null };
     }
     function renderQueue() {
       grid.innerHTML = '';
@@ -430,7 +432,7 @@
         if (n) n.textContent = '正在确认哪些 MV 能播…';
         return probeMvUrls(list.map(normMv)).then(function (playable) {
           if (!playable.length) {
-            if (kind === 'search') { if (n) n.textContent = '搜到的 MV 都要登录才能播 — 先登录网易云，或换个关键词'; return false; }
+            if (kind === 'search') { if (n) n.textContent = '搜到的 MV 都播不了 — 网易云的可能要登录，或换个关键词'; return false; }
             useDemoFallback('最新 MV 都要登录才能播，先看演示片段 — 登录网易云后更多 MV 能播');
             return false;
           }
@@ -441,7 +443,7 @@
           return true;
         });
       }).catch(function () {
-        if (kind === 'search') { if (n) n.textContent = '搜 MV 失败：网络连不上网易云'; return false; }
+        if (kind === 'search') { if (n) n.textContent = '搜 MV 失败：网络连不上，换个词再试'; return false; }
         useDemoFallback('最新 MV 拉不到，先看演示片段');
         return false;
       });
@@ -450,11 +452,12 @@
        用户点哪张都不会撞上“播不了”。 */
     function probeMvUrls(items) {
       var jobs = items.map(function (m) {
-        if (mvUrlCache[m.id]) { m.src = mvUrlCache[m.id]; return Promise.resolve(m); }
-        return fetch('/api/mv/url?id=' + encodeURIComponent(m.id))
+        var cacheKey = (m.provider || 'netease') + ':' + m.id;
+        if (mvUrlCache[cacheKey]) { m.src = mvUrlCache[cacheKey]; return Promise.resolve(m); }
+        return fetch('/api/mv/url?id=' + encodeURIComponent(m.id) + '&provider=' + encodeURIComponent(m.provider || 'netease'))
           .then(function (r) { return r.json(); })
           .then(function (d) {
-            if (d && d.playable && d.url) { mvUrlCache[m.id] = d.url; m.src = d.url; }
+            if (d && d.playable && d.url) { mvUrlCache[cacheKey] = d.url; m.src = d.url; }
             return m;
           }).catch(function () { return m; });
       });
